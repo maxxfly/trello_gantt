@@ -29,6 +29,13 @@ make build       # production build into dist/
 make preview     # preview the build
 ```
 
+### Deploying under a subfolder
+
+The build uses **relative** asset paths (`base: './'` in `vite.config.js`), so you can
+drop the contents of `dist/` into any subdirectory of your web server (e.g.
+`https://example.com/my-app/`) without further configuration.
+
+
 ## Usage
 
 1. Fill in **Board**: the full URL (`https://trello.com/b/xxxx/my-board`) or the board ID.
