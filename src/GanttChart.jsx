@@ -49,6 +49,15 @@ const fmtFull = new Intl.DateTimeFormat("fr-FR", {
 export default function GanttChart({ model }) {
   const { rows, min, max, title } = model;
   const [pxPerDay, setPxPerDay] = useState(28);
+  const [showBack, setShowBack] = useState(
+    () => localStorage.getItem('gantt-trello-show-back') !== '0'
+  );
+  const toggleShowBack = () => {
+    setShowBack((v) => {
+      localStorage.setItem('gantt-trello-show-back', v ? '0' : '1');
+      return !v;
+    });
+  };
   const scrollRef = useRef(null);
 
   const totalDays = Math.max(1, dayDiff(min, max));
@@ -64,6 +73,10 @@ export default function GanttChart({ model }) {
     <div className="gantt">
       <div className="gantt__toolbar">
         <h2 className="gantt__title">{title}</h2>
+        <label className="gantt__toggle" title="Marquer les retours en arrière dans le flux (◀ sur le segment concerné)">
+          <input type="checkbox" checked={showBack} onChange={toggleShowBack} />
+          Retours en arrière
+        </label>
         <div className="gantt__zoom">
           <span>Zoom</span>
           <input
@@ -190,8 +203,14 @@ export default function GanttChart({ model }) {
                             width: `${pct}%`,
                             flex: "none",
                           }}
-                          title={`${s.listName}\n${fmtFull.format(s.from)} → ${fmtFull.format(s.to)}\n${Math.max(1, Math.round(dayDiff(s.from, s.to)))} jour(s)${s.state === "current" ? "\nColonne actuelle" : ""}${s.state === "revisit" ? "\nRetour dans cette colonne" : ""}`}
-                        />
+                          title={`${s.listName}\n${fmtFull.format(s.from)} → ${fmtFull.format(s.to)}\n${Math.max(1, Math.round(dayDiff(s.from, s.to)))} jour(s)${s.state === "current" ? "\nColonne actuelle" : ""}${s.state === "revisit" ? "\nRetour dans cette colonne" : ""}${s.back ? "\n⬅ Retour en arrière dans le flux" : ""}`}
+                        >
+                          {showBack && s.back && (
+                            <span className="gantt__back" aria-label="Retour en arrière">
+                              ◀
+                            </span>
+                          )}
+                        </div>
                       );
                     })}
                   </div>

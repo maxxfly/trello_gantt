@@ -7,6 +7,45 @@ import { getDemoData } from './demoData.js';
 
 const LS_PROFILES = 'gantt-trello-profiles';
 const LS_LAST = 'gantt-trello-last-profile';
+const LS_FILTER = 'gantt-trello-card-filter';
+const LS_PERIOD = 'gantt-trello-period';
+
+const CARD_FILTERS = {
+  board: 'Du tableau',
+  archived: 'Archivées',
+  both: 'Les deux',
+};
+
+/** Applique le filtre cartes actives / archivées aux lignes du modèle. */
+function filterRows(rows, filter) {
+  if (filter === 'board') return rows.filter((r) => !r.closed);
+  if (filter === 'archived') return rows.filter((r) => r.closed);
+  return rows;
+}
+
+/** "2026-09-01" -> Date locale (minuit) ; null si vide/valide. */
+function parseDateInput(value) {
+  if (!value) return null;
+  const d = new Date(`${value}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Filtre par période : ne garde que les tâches qui « existaient » à un moment
+ * de la période choisie (recouvrement [start, end] ∩ [from, to]).
+ * Les bornes absentes sont ouvertes.
+ */
+function filterRowsByPeriod(rows, from, to) {
+  const f = parseDateInput(from);
+  const t = parseDateInput(to);
+  if (!f && !t) return rows;
+  const tEnd = t ? new Date(t.getTime() + 24 * 3600 * 1000) : null; // exclusif
+  return rows.filter((r) => {
+    if (tEnd && r.start >= tEnd) return false; // tâche commencée après la période
+    if (f && r.end < f) return false; // tâche terminée avant la période
+    return true;
+  });
+}
 
 function uid() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -66,6 +105,19 @@ export default function App() {
   const [error, setError] = useState(null);
   const [lastLoaded, setLastLoaded] = useState(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [cardFilter, setCardFilter] = useState(
+    () => localStorage.getItem(LS_FILTER) || 'both'
+  );
+  // Période optionnelle { from, to } en format "YYYY-MM-DD" (vide = tout).
+  const [period, setPeriod] = useState(() => {
+    try {
+      const p = JSON.parse(localStorage.getItem(LS_PERIOD) || 'null');
+      if (p && (p.from || p.to)) return { from: p.from || '', to: p.to || '' };
+    } catch {
+      /* ignore */
+    }
+    return { from: '', to: '' };
+  });
 
   // Évite l'auto-chargement lors du parcours des champs depuis les profils
   const firstRender = useRef(true);
@@ -74,6 +126,36 @@ export default function App() {
     () => profiles.find((p) => p.id === selectedId) || null,
     [profiles, selectedId]
   );
+
+  // Lignes filtrées (actives / archivées / les deux) + compteurs pour le filtre.
+  const counts = useMemo(() => {
+    if (!model) return { open: 0, closed: 0 };
+    const closed = model.rows.filter((r) => r.closed).length;
+    return { open: model.rows.length - closed, closed };
+  }, [model]);
+
+  const filteredModel = useMemo(() => {
+    if (!model) return null;
+    let rows = filterRows(model.rows, cardFilter);
+    rows = filterRowsByPeriod(rows, period.from, period.to);
+    return { ...model, rows };
+  }, [model, cardFilter, period]);
+
+  const periodActive = !!(period.from || period.to);
+
+  const setPeriodPart = (key, value) => {
+    setPeriod((p) => {
+      const next = { ...p, [key]: value };
+      if (next.from || next.to) localStorage.setItem(LS_PERIOD, JSON.stringify(next));
+      else localStorage.removeItem(LS_PERIOD);
+      return next;
+    });
+  };
+
+  const resetPeriod = () => {
+    localStorage.removeItem(LS_PERIOD);
+    setPeriod({ from: '', to: '' });
+  };
 
   const applyRaw = (raw) => {
     setModel(buildGanttModel(raw));
@@ -356,9 +438,56 @@ export default function App() {
       {model && (
         <>
           <Legend lists={model.lists} />
-          <GanttChart model={model} />
+          <GanttChart model={filteredModel} />
           <footer className="app__footer">
-            {model.rows.length} tâche(s){' '}
+            <div className="app__filter" role="group" aria-label="Filtre des cartes">
+              {Object.entries(CARD_FILTERS).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`app__filter-btn${cardFilter === key ? ' app__filter-btn--active' : ''}`}
+                  onClick={() => {
+                    setCardFilter(key);
+                    localStorage.setItem(LS_FILTER, key);
+                  }}
+                >
+                  {label}
+                  <span className="app__filter-count">
+                    {key === 'board'
+                      ? counts.open
+                      : key === 'archived'
+                        ? counts.closed
+                        : model.rows.length}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="app__period" role="group" aria-label="Filtre par période">
+              <label>
+                Du
+                <input
+                  type="date"
+                  value={period.from}
+                  max={period.to || undefined}
+                  onChange={(e) => setPeriodPart('from', e.target.value)}
+                />
+              </label>
+              <label>
+                au
+                <input
+                  type="date"
+                  value={period.to}
+                  min={period.from || undefined}
+                  onChange={(e) => setPeriodPart('to', e.target.value)}
+                />
+              </label>
+              {periodActive && (
+                <button type="button" className="app__period-reset" onClick={resetPeriod}>
+                  ✕ Réinitialiser
+                </button>
+              )}
+            </div>
+            {filteredModel.rows.length} tâche(s) affichée(s) sur {model.rows.length}{' '}
             {lastLoaded ? `· chargées le ${lastLoaded.toLocaleString('fr-FR')}` : ''}
             <button className="app__refresh" onClick={load} disabled={loading}>
               Actualiser

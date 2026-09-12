@@ -342,6 +342,16 @@ code {
   );
 }
 
+.legend__swatch--back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e05c7a;
+  color: #fff;
+  font-size: 9px;
+  line-height: 1;
+}
+
 .legend__swatch--diamond {
   width: 11px;
   height: 11px;
@@ -362,7 +372,7 @@ code {
 .gantt__toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 16px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
@@ -371,7 +381,24 @@ code {
 
 .gantt__title {
   margin: 0;
+  margin-right: auto;
   font-size: 15px;
+}
+
+.gantt__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.gantt__toggle input {
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .gantt__zoom {
@@ -569,6 +596,7 @@ code {
 }
 
 .gantt__segment {
+  position: relative;
   min-width: 2px;
   border-right: 1px solid rgba(255, 255, 255, 0.6);
   display: flex;
@@ -614,6 +642,19 @@ code {
     rgba(0, 0, 0, 0.25) 0 4px,
     transparent 4px 10px
   );
+}
+
+/* Flèche de retour en arrière dans le flux (au début du segment) */
+.gantt__back {
+  position: absolute;
+  left: 1px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  pointer-events: none;
 }
 
 .gantt__bar-label {
@@ -709,12 +750,103 @@ code {
   margin-top: 12px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   font-size: 12.5px;
   color: var(--muted);
 }
 
+.app__filter {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.app__period {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.app__period label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.app__period input[type='date'] {
+  font: inherit;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  background: #fff;
+}
+
+.app__period input[type='date']:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.app__period-reset {
+  font: inherit;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.app__period-reset:hover {
+  border-color: #e11d48;
+  color: #e11d48;
+}
+
+.app__filter-btn {
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.app__filter-btn:last-child {
+  border-right: none;
+}
+
+.app__filter-btn--active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.app__filter-count {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(12, 102, 228, 0.12);
+  color: var(--accent);
+}
+
+.app__filter-btn--active .app__filter-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
 .app__refresh {
+  margin-left: auto;
   font: inherit;
   padding: 5px 12px;
   border: 1px solid var(--border);

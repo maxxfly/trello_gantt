@@ -48,6 +48,13 @@ restored (and reloaded) automatically on the next visit.
 
 A **Demo** button shows a fictional dataset — no Trello account required.
 
+### Archived cards & filter
+
+Both active and **archived** cards are fetched, and a footer filter lets you show
+**Du tableau** (active only), **Archivées** (archived only) or **Les deux** (both). The
+choice is remembered in `localStorage`. Archived rows render faded and always end at their
+last event (no "ongoing" stamp edge).
+
 ### Getting a token
 
 1. Create an API key at <https://trello.com/power-ups/admin>.

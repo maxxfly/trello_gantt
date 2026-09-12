@@ -38,6 +38,10 @@ export default function Legend({ lists }) {
             <span className="legend__swatch legend__swatch--revisit" />
             Retour dans une colonne déjà quittée
           </li>
+          <li>
+            <span className="legend__swatch legend__swatch--back">◀</span>
+            Retour en arrière dans le flux (option)
+          </li>
         </ul>
       </div>
       <div className="legend__group">

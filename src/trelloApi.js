@@ -68,8 +68,10 @@ export async function fetchBoardData(boardInput, token, apiKey = '') {
       ...auth,
       params: {
         fields: 'name,idOrganization',
-        lists: 'open',
-        list_fields: 'name,id,pos',
+        // « all » = listes ouvertes + fermées (les cartes archivées peuvent
+        // vivre dans une colonne supprimée depuis).
+        lists: 'all',
+        list_fields: 'name,id,pos,closed',
         members: 'all',
         member_fields: 'username,fullName,initials,avatarUrl',
       },
@@ -77,14 +79,35 @@ export async function fetchBoardData(boardInput, token, apiKey = '') {
     trelloGet(`/boards/${boardId}/cards`, {
       ...auth,
       params: {
+        // « all » = cartes actives + archivées (le tri se fera côté affichage).
+        filter: 'all',
         fields: 'id,name,start,due,idList,idMembers,closed,pos,shortLink',
       },
     }),
     fetchListMoves(boardId, auth),
   ]);
 
-  const lists = (board.lists || []).filter((l) => !l.closed);
+  const allLists = board.lists || [];
+  const lists = allLists.filter((l) => !l.closed);
+  const closedLists = allLists.filter((l) => l.closed);
   const members = board.members || [];
+
+  // Certains membres assignés à des cartes ne sont plus dans la liste des
+  // membres du board (quitté/partagé) : on récupère leur profil (photo,
+  // initiales...) individuellement pour afficher les bons avatars.
+  const knownIds = new Set(members.map((m) => m.id));
+  const missingIds = [
+    ...new Set((cards || []).flatMap((c) => c.idMembers || [])),
+  ].filter((id) => !knownIds.has(id));
+  const extraMembers = await Promise.all(
+    missingIds.map((id) =>
+      trelloGet(`/members/${id}`, {
+        ...auth,
+        params: { fields: 'id,username,fullName,initials,avatarUrl' },
+      }).catch(() => null)
+    )
+  );
+  for (const m of extraMembers) if (m && m.id) members.push(m);
 
   //movesByCardId : pour chaque carte, la liste des changements de colonne
   //({ date, listBefore, listAfter }) triés du plus ancien au plus récent.
@@ -105,7 +128,7 @@ export async function fetchBoardData(boardInput, token, apiKey = '') {
     movesByCardId[id].sort((x, y) => x.date - y.date);
   }
 
-  return { board, lists, cards, members, movesByCardId };
+  return { board, lists, closedLists, cards, members, movesByCardId };
 }
 
 /**

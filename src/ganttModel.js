@@ -39,17 +39,18 @@ export const STEP_STATE_META = {
  * Trello / actions `updateCard:idList`), et non les checklists. Chaque segment
  * de la barre représente une période passée dans une liste donnée.
  *
- * @param {object} raw - { board, lists, cards, members, movesByCardId } de fetchBoardData
+ * @param {object} raw - { board, lists, closedLists, cards, members, movesByCardId } de fetchBoardData
  * @returns {{ title, rows, membersById, listColors, lists, min, max }}
  */
-export function buildGanttModel({ board, lists, cards, members, movesByCardId = {} }) {
+export function buildGanttModel({ board, lists, closedLists = [], cards, members, movesByCardId = {} }) {
   // Couleur par liste = étape (colonne du board)
   const listColors = {};
   lists.forEach((l, i) => {
     listColors[l.id] = LIST_PALETTE[i % LIST_PALETTE.length];
   });
+  // Résolution des noms : listes ouvertes + fermées (cartes archivées).
   const listById = {};
-  for (const l of lists) listById[l.id] = l;
+  for (const l of [...lists, ...closedLists]) listById[l.id] = l;
   const listName = (id) => listById[id]?.name || '(hors liste)';
 
   const membersById = {};
@@ -59,6 +60,11 @@ export function buildGanttModel({ board, lists, cards, members, movesByCardId = 
   // la dernière colonne du tableau (par position).
   const listsByPos = [...lists].sort((a, b) => (a.pos || 0) - (b.pos || 0));
   const lastListId = listsByPos.length ? listsByPos[listsByPos.length - 1].id : null;
+  // Rang de chaque colonne dans le flux (sert à détecter les retours en arrière)
+  const listIndex = {};
+  listsByPos.forEach((l, i) => {
+    listIndex[l.id] = i;
+  });
 
   const now = new Date();
   const openCards = cards.filter((c) => !c.closed);
@@ -109,10 +115,16 @@ export function buildGanttModel({ board, lists, cards, members, movesByCardId = 
       };
     });
     // Repère « retour en arrière » : une colonne revisitée (hors dernier segment)
+    // + drapeau « back » quand la carte recule dans le flux (index de colonne
+    // inférieur au maximum atteint jusqu'ici) -> flèche ◀ côté affichage.
     const seen = new Set();
+    let maxIdx = -1;
     for (const s of steps) {
+      const idx = s.listId in listIndex ? listIndex[s.listId] : maxIdx;
+      if (maxIdx >= 0 && idx < maxIdx) s.back = true;
       if (s.state !== 'current' && seen.has(s.listId)) s.state = 'revisit';
       seen.add(s.listId);
+      maxIdx = Math.max(maxIdx, idx);
     }
 
     return {

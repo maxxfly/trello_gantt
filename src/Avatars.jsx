@@ -1,5 +1,7 @@
 // Petits composants utilitaires : avatars des membres et légende.
 
+import React, { useEffect, useState } from "react";
+
 const AVATAR_COLORS = [
   "#4f8ef7",
   "#f5a623",
@@ -18,7 +20,24 @@ function colorFor(str) {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
+/**
+ * Les URLs d'avatar Trello sont de la forme
+ *   https://trello.com/1/t/<handle>/avatars/<id>.png           (taille par défaut)
+ *   https://trello.com/1/t/<handle>/avatars/<id>/<n>.png       (taille n)
+ * On force la variante 170px pour un rendu net (retina, avatars agrandis).
+ * Les URLs externes (Gravatar…) sont laissées telles quelles.
+ */
+function hiResAvatar(url) {
+  if (!url) return null;
+  if (!/trello\.com\/1\/t\//.test(url)) return url;
+  if (/\/avatars\/[^/]+\/\d+\.png$/.test(url)) return url.replace(/\/\d+\.png$/, "/170.png");
+  return url.replace(/\.png$/, "/170.png");
+}
+
 export function Avatar({ member, size = 24 }) {
+  const src = hiResAvatar(member?.avatarUrl);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]); // nouvelle photo -> on réessaie
   const label = member?.fullName || member?.username || "?";
   const initials =
     member?.initials ||
@@ -34,15 +53,16 @@ export function Avatar({ member, size = 24 }) {
     fontSize: Math.round(size * 0.45),
     background: colorFor(member?.username || label),
   };
-  if (member?.avatarUrl) {
+  if (src && !failed) {
     return (
       <img
         className="avatar"
         style={style}
-        src={member.avatarUrl}
+        src={src}
         alt={label}
         title={label}
         referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
       />
     );
   }
