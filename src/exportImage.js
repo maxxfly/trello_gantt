@@ -13,32 +13,74 @@ import { jsPDF } from "jspdf";
  * que html2canvas voie tout le contenu (largeur + hauteur réelles).
  * Retourne [noeud à capturer, fonction de nettoyage].
  */
+/** Couleur de fond courante (var --panel), pour un export cohérent jour/nuit. */
+function currentPanelBg() {
+  return (
+    getComputedStyle(document.documentElement).getPropertyValue("--panel").trim() ||
+    "#ffffff"
+  );
+}
+
 function openFullClone(el) {
+  const bg = currentPanelBg();
   const wrapper = document.createElement("div");
-  wrapper.style.cssText =
-    "position:fixed;left:-100000px;top:0;z-index:-1;background:#ffffff;";
+  wrapper.style.cssText = `position:fixed;left:-100000px;top:0;z-index:-1;background:${bg};`;
   const clone = el.cloneNode(true);
   clone.style.margin = "0";
   wrapper.appendChild(clone);
 
-  // Largeur = contenu réel du Gantt (sinon le conteneur hors-écran rétrécit).
+  // --- Dimensions : tout le contenu, sans rognage -------------------------
   const scroller = el.querySelector(".gantt__scroll");
-  const fullW = scroller ? scroller.scrollWidth : el.scrollWidth;
-  clone.style.width = `${fullW}px`;
-  clone.querySelectorAll(".gantt").forEach((g) => {
-    g.style.width = `${fullW}px`;
+  const trackW = (() => {
+    const track = el.querySelector(".gantt__row-track");
+    return track ? track.offsetWidth : scroller ? scroller.scrollWidth - 320 : 0;
+  })();
+
+  // Colonne « Tâche » élargie pour contenir le nom le plus long en entier
+  // (à l'écran il est tronqué par une ellipsis, ce que html2canvas recopie).
+  let maxName = 0;
+  el.querySelectorAll(".gantt__row-name").forEach((n) => {
+    maxName = Math.max(maxName, n.scrollWidth);
   });
+  const sideW = Math.min(640, Math.max(320, Math.ceil(maxName) + 12 + 80)); // + padding + avatars
+  const EXTRA_RIGHT = 320; // place pour les libellés en fin de barre
+  const totalW = sideW + trackW + EXTRA_RIGHT;
+
+  clone.style.width = `${totalW}px`;
+  clone.querySelectorAll(".gantt").forEach((g) => {
+    g.style.width = `${totalW}px`;
+    g.style.overflow = "visible";
+  });
+  const cInner = clone.querySelector(".gantt__inner");
+  if (cInner) cInner.style.width = `${totalW}px`;
 
   // Neutralise le défilement et les hauteurs max sur le clone.
-  const scrollers = clone.querySelectorAll(".gantt__scroll");
-  scrollers.forEach((s) => {
+  clone.querySelectorAll(".gantt__scroll").forEach((s) => {
     s.style.overflow = "visible";
     s.style.maxHeight = "none";
     s.style.height = "auto";
   });
-  clone.querySelectorAll(".gantt__minimap").forEach((m) => {
-    m.style.touchAction = "auto";
-  });
+  // La mini-carte (vue d'ensemble + navigation) n'a aucun sens dans une image :
+  // on la retire completement du clone.
+  clone.querySelectorAll(".gantt__minimap").forEach((m) => m.remove());
+
+  // --- Fin des troncatures de texte ---------------------------------------
+  const widenSide = (n) => {
+    n.style.flex = `0 0 ${sideW}px`;
+    n.style.width = `${sideW}px`;
+    n.style.overflow = "visible";
+  };
+  clone.querySelectorAll(".gantt__row-side, .gantt__header-side").forEach(widenSide);
+  clone
+    .querySelectorAll(
+      ".gantt__row-name, .gantt__row-titles, .gantt__bar-label--after, .gantt__month",
+    )
+    .forEach((n) => {
+      n.style.overflow = "visible";
+      n.style.textOverflow = "clip";
+      n.style.maxWidth = "none";
+    });
+
   // Les éléments collants (sticky) n'ont plus de conteneur défilant : on les
   // fige en flux normal pour éviter chevauchements/superpositions à la capture.
   clone
@@ -59,7 +101,7 @@ export async function captureGantt(el) {
     // Double la résolution pour un rendu net.
     return await html2canvas(clone, {
       scale: 2,
-      backgroundColor: "#ffffff",
+      backgroundColor: currentPanelBg(),
       useCORS: true, // avatars Trello (images cross-origin)
       logging: false,
     });
@@ -97,6 +139,7 @@ export async function exportPdf(el, filename, title = "Gantt") {
   const pageH = pdf.internal.pageSize.getHeight();
   const margin = 24;
   const usableW = pageW - margin * 2;
+  const bg = currentPanelBg();
 
   // Hauteur de l'image à la largeur utile.
   const imgH = (canvas.height / canvas.width) * usableW;
@@ -120,7 +163,7 @@ export async function exportPdf(el, filename, title = "Gantt") {
       slice.width = canvas.width;
       slice.height = h;
       const ctx = slice.getContext("2d");
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = bg;
       ctx.fillRect(0, 0, slice.width, slice.height);
       ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
       if (page > 0) pdf.addPage();

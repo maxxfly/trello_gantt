@@ -56,8 +56,46 @@ const fmtFull = new Intl.DateTimeFormat("fr-FR", {
   year: "numeric",
 });
 
+/**
+ * Statistiques d'une tâche pour l'infobulle de survol :
+ *  - jours total (durée de la barre, prolongée jusqu'à aujourd'hui si en cours)
+ *  - répartition en % du temps par étape (colonne), agrégée si revisitée
+ *  - nombre de repoussages de l'échéance (taille de dueHistory)
+ *  - nombre de retours en arrière (segments marqués back)
+ */
+function computeRowStats(row) {
+  const totalDays = Math.max(0, Math.round(dayDiff(row.start, row.end)));
+  // Agrégation par colonne (un même nom peut revenir : on somme les durées).
+  const byCol = new Map();
+  let sumMs = 0;
+  for (const s of row.steps || []) {
+    const ms = Math.max(0, s.to - s.from);
+    sumMs += ms;
+    const e = byCol.get(s.listId) || { listName: s.listName, color: s.color, ms: 0 };
+    e.ms += ms;
+    byCol.set(s.listId, e);
+  }
+  const partsAll = [...byCol.values()]
+    .map((e) => ({
+      listName: e.listName,
+      color: e.color,
+      pct: sumMs > 0 ? Math.round((e.ms / sumMs) * 100) : 0,
+      days: Math.max(0, Math.round(e.ms / DAY_MS)),
+    }))
+    .sort((a, b) => b.ms - a.ms);
+  // On masque les étapes à durée nulle (artefacts de frontière) pour garder la
+  // liste lisible ; s'il ne reste rien, on garde tout (cas dégénéré).
+  const parts = partsAll.filter((p) => p.days > 0);
+  const shown = parts.length ? parts : partsAll;
+  const duePushbacks = (row.dueHistory || []).length;
+  const backCount = (row.steps || []).filter((s) => s.back).length;
+  return { totalDays, parts: shown, duePushbacks, backCount };
+}
+
 export default function GanttChart({ model }) {
   const { rows, min, max, title } = model;
+  // Infobulle de stats au survol du titre d'une tâche.
+  const [hover, setHover] = useState(null); // { row, x, y }
   const [pxPerDay, setPxPerDay] = useState(28);
   const pxPerDayRef = useRef(pxPerDay);
   const zoomAnchorRef = useRef(null); // { days, trackX } : date à garder sous le curseur
@@ -151,6 +189,20 @@ export default function GanttChart({ model }) {
   const todayX = x(new Date(new Date().setHours(0, 0, 0, 0)));
   const todayVisible = todayX >= 0 && todayX <= totalWidth;
 
+  // A l'arrivee de nouvelles donnees (min/max changed), on ouvre la vue sur
+  // « aujourd'hui » (la ligne du jour) au lieu du bord gauche, sans entrer en
+  // conflit avec l'ancrage du zoom (qui ne se declenche que sur pxPerDay).
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const visibleTrack = Math.max(1, el.clientWidth - SIDE_W);
+    const maxScroll = Math.max(0, totalWidth - visibleTrack);
+    const target = todayX - visibleTrack * 0.35; // aujourd'hui a ~35 % depuis la gauche
+    el.scrollLeft = Math.max(0, Math.min(maxScroll, target));
+    syncView();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [min, max]);
+
   // Week-ends (sam.+dim.) grisés : une bande de 7 jours (2 jours grisés puis
   // 5 transparents) répétée en fond de piste, calée sur un samedi <= min.
   const weekendStyle = useMemo(() => {
@@ -160,7 +212,7 @@ export default function GanttChart({ model }) {
     while (d.getDay() !== 6) d.setDate(d.getDate() + 1);
     const satX = dayDiff(min, d) * pxPerDay;
     return {
-      backgroundImage: `linear-gradient(90deg, rgba(100,116,139,0.12) 0 ${2 * pxPerDay}px, transparent ${2 * pxPerDay}px ${7 * pxPerDay}px)`,
+      backgroundImage: `linear-gradient(90deg, var(--weekend) 0 ${2 * pxPerDay}px, transparent ${2 * pxPerDay}px ${7 * pxPerDay}px)`,
       backgroundSize: `${7 * pxPerDay}px 100%`,
       backgroundPosition: `${satX}px 0`,
       backgroundRepeat: "repeat",
@@ -353,19 +405,33 @@ export default function GanttChart({ model }) {
                 key={row.id}
                 className={`gantt__row${row.closed ? " gantt__row--closed" : ""}`}
               >
-                <div className="gantt__row-side" title={row.name}>
+                <div className="gantt__row-side">
                   <span
                     className="gantt__row-dot"
                     style={{ background: row.color }}
                   />
-                  <span className="gantt__row-titles">
+                  <span
+                    className="gantt__row-titles"
+                    onMouseEnter={(e) =>
+                      setHover({ row, x: e.clientX, y: e.clientY })
+                    }
+                    onMouseMove={(e) =>
+                      setHover((h) =>
+                        h && h.row.id === row.id
+                          ? { ...h, x: e.clientX, y: e.clientY }
+                          : h,
+                      )
+                    }
+                    onMouseLeave={() =>
+                      setHover((h) => (h && h.row.id === row.id ? null : h))
+                    }
+                  >
                     {row.url ? (
                       <a
                         className="gantt__row-name gantt__row-link"
                         href={row.url}
                         target="_blank"
                         rel="noreferrer"
-                        title={`Ouvrir la carte dans Trello : ${row.name}`}
                       >
                         {row.name}
                       </a>
@@ -481,6 +547,87 @@ export default function GanttChart({ model }) {
             );
           })}
         </div>
+      </div>
+
+      {hover && <RowTooltip hover={hover} />}
+    </div>
+  );
+}
+
+/**
+ * Infobulle de statistiques au survol du titre d'une tâche. Positionnée en
+ * `fixed` près du curseur (hors du conteneur défilant, donc jamais rognée) et
+ * rabattue si elle dépasserait les bords de la fenêtre.
+ */
+function RowTooltip({ hover }) {
+  const { row, x, y } = hover;
+  const stats = computeRowStats(row);
+  const W = 260; // largeur max approximative pour le rabattage horizontal
+  const left = Math.max(8, Math.min(x + 14, window.innerWidth - W - 8));
+  const flipUp = y > window.innerHeight - 260;
+  const top = flipUp ? undefined : y + 16;
+
+  return (
+    <div
+      className="rowtip"
+      style={{
+        left,
+        top,
+        bottom: flipUp ? window.innerHeight - y + 12 : undefined,
+        maxWidth: W,
+      }}
+      role="tooltip"
+    >
+      <div className="rowtip__title">
+        <span className="rowtip__dot" style={{ background: row.color }} />
+        <span className="rowtip__name">{row.name}</span>
+      </div>
+      <div className="rowtip__status">
+        {row.closed
+          ? "Archivée"
+          : row.done
+            ? "Terminée"
+            : "En cours"}{" "}
+        · {row.listName}
+      </div>
+
+      <div className="rowtip__row">
+        <span>Durée</span>
+        <strong>{stats.totalDays} j</strong>
+      </div>
+
+      {stats.parts.length > 0 && (
+        <div className="rowtip__section">
+          <div className="rowtip__label">Répartition par étape</div>
+          <div className="rowtip__bar">
+            {stats.parts.map((p, i) => (
+              <span
+                key={i}
+                style={{ background: p.color, width: `${p.pct}%` }}
+                title={`${p.listName} : ${p.pct}%`}
+              />
+            ))}
+          </div>
+          <ul className="rowtip__parts">
+            {stats.parts.map((p, i) => (
+              <li key={i}>
+                <span className="rowtip__dot" style={{ background: p.color }} />
+                <span className="rowtip__part-name">{p.listName}</span>
+                <span className="rowtip__part-pct">{p.pct}%</span>
+                <span className="rowtip__part-days">{p.days} j</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="rowtip__row">
+        <span>Repoussages d'échéance</span>
+        <strong>{stats.duePushbacks}</strong>
+      </div>
+      <div className="rowtip__row">
+        <span>Retours en arrière</span>
+        <strong>{stats.backCount}</strong>
       </div>
     </div>
   );

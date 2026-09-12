@@ -2,11 +2,43 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gantt depuis Trello</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Nom & apparence (PWA / macOS / iOS / Android) -->
+    <title>Gantt Trello</title>
+    <meta name="application-name" content="Gantt Trello" />
+    <meta name="apple-mobile-web-app-title" content="Gantt Trello" />
+    <meta name="description" content="Transformez un tableau Trello en diagramme de Gantt." />
+    <meta name="theme-color" content="#0b3d91" />
+
+    <!-- Installation PWA -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+
+    <!-- Icônes : le SVG est la source unique pour l'onglet. iOS/manifest
+         exigent du raster -> apple-touch-icon.png (régénéré depuis le SVG). -->
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="mask-icon" href="./favicon.svg" color="#0b3d91" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+
+    <!-- Comportement en app ajoutée à l'accueil (iOS/WebKit) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <!-- Applique le thème avant le 1er rendu (évite le flash jour/nuit). -->
+    <script>
+      try {
+        var t = localStorage.getItem("gantt-trello-theme");
+        if (t !== "light" && t !== "dark")
+          t = window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <script type="module" src="./src/main.jsx"></script>
   </body>
 </html>

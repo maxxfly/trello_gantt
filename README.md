@@ -38,20 +38,54 @@ make preview     # preview the build
 
 The build uses **relative** asset paths (`base: './'` in `vite.config.js`), so you can
 drop the contents of `dist/` into any subdirectory of your web server (e.g.
-`https://example.com/my-app/`) without further configuration.
+`https://example.com/my-app/`) without further configuration. The web manifest, service
+worker and icons are all registered with relative paths, so PWA install also works from a
+subfolder.
+
+### Installable PWA (macOS, iOS, Android, desktop)
+
+The app ships a web manifest (`public/manifest.webmanifest`), icons (`public/icons/`,
+generated from `favicon.svg`) and an offline service worker (`public/sw.js`). Name shown
+on install: **Gantt Trello**. Service workers require a **secure context** — `localhost`
+counts, but a plain `http://` LAN address does not (use `https://` or `localhost`).
+
+- **macOS (Safari)** — *File ▸ Add to Dock…* (or *Share ▸ Add to Home Screen* on iOS).
+  The window then opens as a standalone app named *Gantt Trello* with its own Dock icon.
+- **macOS / Windows / Linux (Chrome or Edge)** — the **install** icon in the address bar
+  (or the ⋮ menu → *Install app…*); it lands on the desktop / Start menu / Applications.
+- **Android (Chrome)** — ⋮ → *Add to Home screen*.
+
+To regenerate the PNG icons after editing `public/favicon.svg`:
+
+```bash
+magick -background '#0b3d91' public/favicon.svg -resize 180x180 -flatten public/icons/apple-touch-icon.png
+magick -background '#0b3d91' public/favicon.svg -resize 192x192 -flatten public/icons/icon-192.png
+magick -background '#0b3d91' public/favicon.svg -resize 512x512 -flatten public/icons/icon-512.png
+magick -background '#0b3d91' public/favicon.svg -resize 512x512 -flatten public/icons/maskable-512.png
+```
 
 
 ## Usage
 
-1. Fill in **Board**: the full URL (`https://trello.com/b/xxxx/my-board`) or the board ID.
-2. Fill in **Token** (and optionally the **API key**).
-3. Click **Show Gantt**.
+The header is laid out in three rows:
 
-You can **save** the board + token + API key under a **name** as a profile. Profiles are
-stored in your browser's `localStorage`, listed in the dropdown, and the last one used is
-restored (and reloaded) automatically on the next visit.
+1. **Title** on the left, **❓ help** and **🌙/☀️ theme** on the right.
+2. **Profile** management on the left (dropdown + **＋** new / **✎** rename / **🗑** delete),
+   **⚙️ Connexion Trello** on the right.
+3. **Afficher le Gantt** (enabled only once a profile is selected *and* a token is set) and
+   **Démo**.
 
-A **Demo** button shows a fictional dataset — no Trello account required.
+Steps:
+
+1. Click **＋** and name a new profile in the popup (or pick an existing one in the dropdown;
+   **Aucun** resets the form).
+2. Open **⚙️ Connexion Trello** and fill Board URL/ID, Token, optional API key.
+3. Click **Afficher le Gantt**.
+
+Profiles, board and credentials live in your browser's `localStorage`; the last profile used
+is restored (and reloaded) automatically on the next visit.
+
+A **Démo** button shows a fictional dataset — no Trello account required.
 
 ### Archived cards & filter
 
@@ -74,12 +108,22 @@ last event (no "ongoing" stamp edge).
 
 All four filters (card state, search, period, tags) combine.
 
+### Light / dark theme
+
+A **🌙 / ☀️** button in the header toggles day/night. The choice is remembered in
+`localStorage`; on first visit it follows the OS `prefers-color-scheme`. All colors run
+through CSS variables (`:root` = light, `[data-theme='dark']` = dark), and PNG/PDF exports
+use the current theme's background.
+
 ### Reading the timeline
 
 - **Weekends** (Sat + Sun) are shaded gray across the timeline.
 - **Minimap**: a bird's-eye view of all bars above the chart; click or drag the highlight
   to navigate.
 - **Density**: the **⇲ Compact** button shrinks row height for long lists.
+- **Hover stats**: hovering a task's **title** shows a tooltip with its total duration in
+  days, the **% split across columns** (steps), the number of **due-date pushes**, and the
+  number of **back-to-earlier-column** moves.
 
 ### Summary
 
@@ -101,12 +145,18 @@ the initial bundle). Known limitation: `html2canvas` doesn't render the CSS `mas
 for the "ongoing" stamp edge, so those bars export with a plain (non-notched) end; remote
 Trello avatars may be skipped if their CORS headers block the canvas.
 
-### Getting a token
+### Getting the API key and token
 
-1. Create an API key at <https://trello.com/power-ups/admin>.
-2. Generate a read-only token via:
+1. Create a Power-Up and copy its **API key** at
+   <https://trello.com/power-ups/admin> (the *API key* tab — copy **Clé d'API**, *not*
+   *Secret*). Add this app's address (e.g. `http://localhost:5173` or your domain) under
+   **Origines autorisées** so Trello may redirect back.
+2. In **⚙️ Connexion Trello**, paste the key and click **🔑**: a Trello authorization popup
+   opens (read-only, never expires); press **Allow** and the token is captured automatically
+   (via `postMessage`, with a URL-fragment fallback).
+3. Manual fallback if you prefer: open
    `https://trello.com/1/authorize?expiration=never&scope=read&response_type=token&key=YOUR_KEY`
-3. Copy the token shown.
+   and paste the token shown.
 
 Credentials are stored only in your browser's `localStorage` and sent directly to the
 Trello API — there is no intermediary server.
