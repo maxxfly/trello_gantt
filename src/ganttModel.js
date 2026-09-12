@@ -23,6 +23,31 @@ export const LIST_PALETTE = [
   '#5aa9e6',
 ];
 
+// Couleurs officielles des étiquettes Trello (l'API renvoie le nom, pas l'hex).
+const TRELLO_LABEL_COLORS = {
+  green: '#61bd4f',
+  yellow: '#f2d600',
+  orange: '#ff9f1a',
+  red: '#eb5a46',
+  purple: '#c377e0',
+  blue: '#0079bf',
+  sky: '#00c2e0',
+  lime: '#51e898',
+  pink: '#ff80ce',
+  black: '#3d444b',
+  gray: '#8a8a8a',
+  // Anciennes variantes « light gray / dark gray » :
+  'light gray': '#b3bac4',
+  'light green': '#7bc86c',
+  'light yellow': '#f7d74e',
+  'light orange': '#ffab4a',
+  'light red': '#ec9488',
+  'light purple': '#cbadd3',
+  'light blue': '#add3ff',
+  'light pink': '#eaaaae',
+  'dark blue': '#0066a6',
+};
+
 // Un segment = une période passée dans une colonne. Couleur = celle de la
 // liste ; le dernier segment (colonne actuelle d'une tâche non terminée) est
 // hachuré « en cours ».
@@ -39,10 +64,10 @@ export const STEP_STATE_META = {
  * Trello / actions `updateCard:idList`), et non les checklists. Chaque segment
  * de la barre représente une période passée dans une liste donnée.
  *
- * @param {object} raw - { board, lists, closedLists, cards, members, movesByCardId } de fetchBoardData
+ * @param {object} raw - { board, lists, closedLists, labels, cards, members, movesByCardId } de fetchBoardData
  * @returns {{ title, rows, membersById, listColors, lists, min, max }}
  */
-export function buildGanttModel({ board, lists, closedLists = [], cards, members, movesByCardId = {} }) {
+export function buildGanttModel({ board, lists, closedLists = [], labels = [], cards, members, movesByCardId = {}, dueHistoryByCardId = {} }) {
   // Couleur par liste = étape (colonne du board)
   const listColors = {};
   lists.forEach((l, i) => {
@@ -52,6 +77,11 @@ export function buildGanttModel({ board, lists, closedLists = [], cards, members
   const listById = {};
   for (const l of [...lists, ...closedLists]) listById[l.id] = l;
   const listName = (id) => listById[id]?.name || '(hors liste)';
+
+  // Étiquettes (tags) du board, pour les chips sur les cartes.
+  // L'API renvoie soit un nom de couleur ("red", "blue"…), soit colorHex.
+  const labelsById = {};
+  for (const l of labels) labelsById[l.id] = l;
 
   const membersById = {};
   for (const m of members) membersById[m.id] = m;
@@ -140,7 +170,24 @@ export function buildGanttModel({ board, lists, closedLists = [], cards, members
       due,
       closed: !!c.closed,
       done,
+      // Échéances antérieures (repoussées), hors de la valeur actuelle.
+      dueHistory: (dueHistoryByCardId[c.id] || []).filter(
+        (h) => !due || h.due.getTime() !== due.getTime()
+      ),
       members: (c.idMembers || []).map((id) => membersById[id]).filter(Boolean),
+      labels: (c.idLabels || [])
+        .map((id) => labelsById[id])
+        .filter(Boolean)
+        .map((l) => ({
+          id: l.id,
+          name: l.name || '',
+          color:
+            l.colorHex ||
+            (typeof l.color === 'string' && l.color.startsWith('#')
+              ? l.color
+              : TRELLO_LABEL_COLORS[l.color]) ||
+            '#94a3b8',
+        })),
       steps,
     };
   });

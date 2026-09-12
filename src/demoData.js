@@ -20,22 +20,30 @@ const lists = [
   { id: 'l4', name: 'Terminé', pos: 4 },
 ];
 
+// Étiquettes aux couleurs Trello « officielles ».
+const labels = [
+  { id: 'lb1', name: 'Urgent', color: '#EB5A46' },
+  { id: 'lb2', name: 'Backend', color: '#0079BF' },
+  { id: 'lb3', name: 'Frontend', color: '#61BD4F' },
+  { id: 'lb4', name: 'Dette technique', color: '#FFAB4A' },
+  { id: 'lb5', name: 'Doc', color: '#C377E0' },
+];
+
 const cards = [
-  { id: '66f1a2b3c4d5e6f7a8b9c0d1', shortLink: 'demoAAAA', name: 'Refonte de la page d’accueil', idList: 'l2', start: iso(daysAgo(12)), due: iso(daysAhead(6)), idMembers: ['m1', 'm2'], closed: false },
-  { id: '66f8b3c4d5e6f7a8b9c0d1e2', shortLink: 'demoBBBB', name: 'API de facturation', idList: 'l2', start: iso(daysAgo(8)), due: iso(daysAhead(10)), idMembers: ['m3'], closed: false },
-  { id: '6702c4d5e6f7a8b9c0d1e2f3', shortLink: 'demoCCCC', name: 'Migration base de données', idList: 'l1', start: iso(daysAgo(2)), due: iso(daysAhead(18)), idMembers: ['m3', 'm4'], closed: false },
-  { id: '66d1d5e6f7a8b9c0d1e2f3a4', shortLink: 'demoDDDD', name: 'Documentation utilisateur', idList: 'l3', start: iso(daysAgo(20)), due: iso(daysAgo(1)), idMembers: ['m4'], closed: false },
-  { id: '66b3e6f7a8b9c0d1e2f3a4b5', shortLink: 'demoEEEE', name: 'Audit de sécurité', idList: 'l4', start: iso(daysAgo(30)), due: iso(daysAgo(12)), idMembers: ['m1', 'm2', 'm3', 'm4'], closed: false },
-  { id: '670ae7f8a8b9c0d1e2f3a4b5', shortLink: 'demoFFFF', name: 'Onboarding nouvelle équipe', idList: 'l1', start: iso(daysAgo(1)), due: iso(daysAhead(4)), idMembers: ['m2'], closed: false },
-  { id: '6705f8a9b9c0d1e2f3a4b5c6', shortLink: 'demoGGGG', name: 'Plan marketing Q4', idList: 'l3', start: iso(daysAgo(5)), due: iso(daysAhead(3)), idMembers: ['m1'], closed: false },
-  { id: '6692a1b2c3d4e5f6a7b8c9d0', shortLink: 'demoHHHH', name: 'Correctif paiement dupliqué', idList: 'l4', start: iso(daysAgo(45)), due: iso(daysAgo(38)), idMembers: ['m2'], closed: true },
-  { id: '6680b2c3d4e5f6a7b8c9d0e1', shortLink: 'demoIIII', name: 'Migration vers l’API v2', idList: 'l4', start: iso(daysAgo(60)), due: iso(daysAgo(41)), idMembers: ['m3', 'm4'], closed: true },
+  { id: '66f1a2b3c4d5e6f7a8b9c0d1', shortLink: 'demoAAAA', name: 'Refonte de la page d’accueil', idList: 'l2', start: iso(daysAgo(12)), due: iso(daysAhead(6)), idMembers: ['m1', 'm2'], idLabels: ['lb3', 'lb1'], closed: false },
+  { id: '66f8b3c4d5e6f7a8b9c0d1e2', shortLink: 'demoBBBB', name: 'API de facturation', idList: 'l2', start: iso(daysAgo(8)), due: iso(daysAhead(10)), idMembers: ['m3'], idLabels: ['lb2'], closed: false },
+  { id: '6702c4d5e6f7a8b9c0d1e2f3', shortLink: 'demoCCCC', name: 'Migration base de données', idList: 'l1', start: iso(daysAgo(2)), due: iso(daysAhead(18)), idMembers: ['m3', 'm4'], idLabels: ['lb2', 'lb4'], closed: false },
+  { id: '66d1d5e6f7a8b9c0d1e2f3a4', shortLink: 'demoDDDD', name: 'Documentation utilisateur', idList: 'l3', start: iso(daysAgo(20)), due: iso(daysAgo(1)), idMembers: ['m4'], idLabels: ['lb5'], closed: false },
+  { id: '66b3e6f7a8b9c0d1e2f3a4b5', shortLink: 'demoEEEE', name: 'Audit de sécurité', idList: 'l4', start: iso(daysAgo(30)), due: iso(daysAgo(12)), idMembers: ['m1', 'm2', 'm3', 'm4'], idLabels: ['lb4', 'lb1'], closed: false },
+  { id: '670ae7f8a8b9c0d1e2f3a4b5', shortLink: 'demoFFFF', name: 'Onboarding nouvelle équipe', idList: 'l1', start: iso(daysAgo(1)), due: iso(daysAhead(4)), idMembers: ['m2'], idLabels: [], closed: false },
+  { id: '6705f8a9b9c0d1e2f3a4b5c6', shortLink: 'demoGGGG', name: 'Plan marketing Q4', idList: 'l3', start: iso(daysAgo(5)), due: iso(daysAhead(3)), idMembers: ['m1'], idLabels: ['lb5'], closed: false },
+  { id: '6692a1b2c3d4e5f6a7b8c9d0', shortLink: 'demoHHHH', name: 'Correctif paiement dupliqué', idList: 'l4', start: iso(daysAgo(45)), due: iso(daysAgo(38)), idMembers: ['m2'], idLabels: ['lb1', 'lb2'], closed: true },
+  { id: '6680b2c3d4e5f6a7b8c9d0e1', shortLink: 'demoIIII', name: 'Migration vers l’API v2', idList: 'l4', start: iso(daysAgo(60)), due: iso(daysAgo(41)), idMembers: ['m3', 'm4'], idLabels: ['lb2', 'lb4'], closed: true },
 ];
 
 // Historique des changements de colonne (simule les actions updateCard:idList).
 // { date, listBefore, listAfter } triés du plus ancien au plus récent.
-const movesByCardId = {
-  '66f1a2b3c4d5e6f7a8b9c0d1': [
+const movesByCardId = {  '66f1a2b3c4d5e6f7a8b9c0d1': [
     { date: daysAgo(12), listBefore: 'l1', listAfter: 'l2' },
     { date: daysAgo(4), listBefore: 'l2', listAfter: 'l3' },
     { date: daysAgo(1), listBefore: 'l3', listAfter: 'l2' }, // retour en arrière
@@ -69,12 +77,28 @@ const movesByCardId = {
   ],
 };
 
+// Anciennes échéances (repoussées), simulées depuis updateCard:due/dueChanged.
+const dueHistoryByCardId = {
+  '66f1a2b3c4d5e6f7a8b9c0d1': [
+    { due: daysAhead(-9), changedAt: daysAgo(9) }, // repoussée une 1re fois
+    { due: daysAhead(-2), changedAt: daysAgo(2) }, // puis une 2e -> due actuelle
+  ],
+  '66d1d5e6f7a8b9c0d1e2f3a4': [
+    { due: daysAgo(15), changedAt: daysAgo(15) },
+  ],
+  '6705f8a9b9c0d1e2f3a4b5c6': [
+    { due: daysAhead(-6), changedAt: daysAgo(6) },
+  ],
+};
+
 export function getDemoData() {
   return {
     board: { id: 'demo', name: 'Projet Alpha (démo)' },
     lists,
     cards,
     members,
+    labels,
     movesByCardId,
+    dueHistoryByCardId,
   };
 }

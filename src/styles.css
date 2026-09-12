@@ -360,6 +360,14 @@ code {
   transform: rotate(45deg);
 }
 
+.legend__swatch--diamond-past {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: #b6bec9;
+  transform: rotate(45deg);
+}
+
 /* ---------- Gantt ---------- */
 .gantt {
   margin-top: 18px;
@@ -417,6 +425,84 @@ code {
 .gantt__scroll {
   overflow: auto;
   max-height: 70vh;
+}
+
+/* ---------- Mini-carte (vue d'ensemble) ---------- */
+.gantt__minimap {
+  position: relative;
+  height: 54px;
+  border-bottom: 1px solid var(--border);
+  background: #f7f9fd;
+  cursor: pointer;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+
+.gantt__mini-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.gantt__mini-bar {
+  position: absolute;
+  top: 0.5px;
+  height: 2px;
+  border-radius: 1px;
+  display: block;
+}
+
+.gantt__mini-viewport {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(12, 102, 228, 0.12);
+  border: 1.5px solid var(--accent);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+/* Boutons à icône de la barre d'outils */
+.gantt__iconbtn {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.gantt__iconbtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Mode compact : lignes plus denses (la largeur de colonne ne change pas :
+   elle est supposée constante (= 320, var --side-w) par le zoom ancré et la
+   mini-carte en JS). */
+.gantt--compact {
+  --row-h: 26px;
+}
+
+.gantt--compact .gantt__row-name {
+  font-size: 12px;
+}
+
+.gantt--compact .gantt__bar {
+  height: 16px;
+}
+
+.gantt--compact .gantt__labels {
+  display: none;
+}
+
+.gantt--compact .gantt__bar-label--after {
+  font-size: 11px;
 }
 
 .gantt__inner {
@@ -534,10 +620,36 @@ code {
   flex: none;
 }
 
-.gantt__row-name {
+.gantt__row-titles {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gantt__row-name {
   font-size: 13px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt__labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.gantt__label {
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 0 6px;
+  border-radius: 4px;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+  max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -702,6 +814,15 @@ code {
   z-index: 3;
 }
 
+/* Ancienne échéance (repoussée) : même losange, grisé */
+.gantt__due--past {
+  background: #b6bec9;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  opacity: 0.9;
+}
+
 .gantt__empty {
   padding: 40px;
   text-align: center;
@@ -763,6 +884,82 @@ code {
   overflow: hidden;
 }
 
+.app__search {
+  display: inline-flex;
+  align-items: center;
+}
+
+.app__summary {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.app__summary-title {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.app__summary-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.app__summary-seg {
+  min-width: 3px;
+  border-radius: 2px;
+}
+
+.app__summary-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+
+.app__summary-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app__summary-list strong {
+  color: var(--text);
+}
+
+.app__summary-list em {
+  font-style: normal;
+  opacity: 0.8;
+}
+
+.app__search input {
+  font: inherit;
+  font-size: 12.5px;
+  width: 230px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.app__search input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .app__period {
   display: inline-flex;
   align-items: center;
@@ -773,6 +970,193 @@ code {
   background: var(--panel);
   font-size: 12px;
   color: var(--muted);
+}
+
+/* Icônes devant les champs de filtre */
+.app__field-icon {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+/* ---------- Sélecteur de tags (liste déroulante) ---------- */
+.tagselect {
+  position: relative;
+}
+
+.tagselect__trigger {
+  font: inherit;
+  font-size: 12.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  max-width: 240px;
+}
+
+.tagselect__trigger:hover,
+.tagselect__trigger--open {
+  border-color: var(--accent);
+}
+
+.tagselect__value {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tagselect__clear {
+  font-size: 11px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(225, 29, 72, 0.12);
+  color: #e11d48;
+  cursor: pointer;
+  flex: none;
+}
+
+.tagselect__clear:hover {
+  background: rgba(225, 29, 72, 0.25);
+}
+
+.tagselect__caret {
+  color: var(--muted);
+  font-size: 10px;
+  flex: none;
+}
+
+.tagselect__panel {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: 250px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(20, 30, 60, 0.18);
+  padding: 8px;
+}
+
+.tagselect__search {
+  font: inherit;
+  font-size: 12.5px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  margin-bottom: 6px;
+}
+
+.tagselect__search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.tagselect__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.tagselect__opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.tagselect__opt:hover {
+  background: #f2f5fb;
+}
+
+.tagselect__opt--checked {
+  background: #eaf1fb;
+  font-weight: 600;
+}
+
+.tagselect__opt input {
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.tagselect__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.tagselect__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tagselect__empty {
+  padding: 8px 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Presets de période + export */
+.app__period-presets {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.app__preset {
+  font: inherit;
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.app__preset:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.app__export {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.app__export:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.app__export:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.app__exports {
+  display: inline-flex;
+  gap: 4px;
 }
 
 .app__period label {

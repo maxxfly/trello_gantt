@@ -74,6 +74,8 @@ export async function fetchBoardData(boardInput, token, apiKey = '') {
         list_fields: 'name,id,pos,closed',
         members: 'all',
         member_fields: 'username,fullName,initials,avatarUrl',
+        // Étiquettes (tags) du tableau -> board.labels
+        labels: 'all',
       },
     }),
     trelloGet(`/boards/${boardId}/cards`, {
@@ -81,7 +83,7 @@ export async function fetchBoardData(boardInput, token, apiKey = '') {
       params: {
         // « all » = cartes actives + archivées (le tri se fera côté affichage).
         filter: 'all',
-        fields: 'id,name,start,due,idList,idMembers,closed,pos,shortLink',
+        fields: 'id,name,start,due,idList,idMembers,closed,pos,shortLink,idLabels',
       },
     }),
     fetchListMoves(boardId, auth),
@@ -111,29 +113,53 @@ export async function fetchBoardData(boardInput, token, apiKey = '') {
 
   //movesByCardId : pour chaque carte, la liste des changements de colonne
   //({ date, listBefore, listAfter }) triés du plus ancien au plus récent.
+  //dueHistoryByCardId : anciennes échéances successives (repoussées), issues
+  //des actions updateCard:due / updateCard:dueChanged (data.old.due).
   const movesByCardId = {};
+  const dueHistoryByCardId = {};
   for (const a of moveActions) {
     const cardId = a.data?.card?.id;
-    const before = a.data?.listBefore?.id;
+    if (!cardId) continue;
+    // L'API renvoie type="updateCard" pour tout : on classe selon les données.
+    // Une même action peut contenir les deux (déplacement + échéance) : on
+    // traite chaque cas indépendamment.
     const after = a.data?.listAfter?.id;
-    const date = a.date;
-    if (!cardId || !after || !date) continue;
-    (movesByCardId[cardId] = movesByCardId[cardId] || []).push({
-      date: new Date(date),
-      listBefore: before || null,
-      listAfter: after,
-    });
+    if (after && a.date) {
+      // Déplacement entre colonnes.
+      const before = a.data?.listBefore?.id;
+      (movesByCardId[cardId] = movesByCardId[cardId] || []).push({
+        date: new Date(a.date),
+        listBefore: before || null,
+        listAfter: after,
+      });
+    }
+    {
+      // Changement d'échéance : l'ancienne valeur (data.old.due) était en
+      // vigueur jusqu'à la date de l'action.
+      const oldDue = a.data?.old?.due;
+      if (oldDue) {
+        const list = (dueHistoryByCardId[cardId] = dueHistoryByCardId[cardId] || []);
+        const due = new Date(oldDue).getTime();
+        if (!list.some((h) => h.due.getTime() === due)) {
+          list.push({ due: new Date(oldDue), changedAt: a.date ? new Date(a.date) : null });
+        }
+      }
+    }
   }
   for (const id of Object.keys(movesByCardId)) {
     movesByCardId[id].sort((x, y) => x.date - y.date);
   }
+  for (const id of Object.keys(dueHistoryByCardId)) {
+    dueHistoryByCardId[id].sort((x, y) => x.due - y.due);
+  }
 
-  return { board, lists, closedLists, cards, members, movesByCardId };
+  return { board, lists, closedLists, cards, members, movesByCardId, dueHistoryByCardId, labels: board.labels || [] };
 }
 
 /**
- * Historique des déplacements de cartes entre listes (filter=updateCard:idList),
- * paginé (100 actions max par requête, jusqu'à 20 pages = 2000 déplacements).
+ * Historique des déplacements de cartes entre listes ET des changements
+ * d'échéance (filter combiné), paginé (100 actions max par requête,
+ * jusqu'à 20 pages = 2000 actions).
  */
 async function fetchListMoves(boardId, auth) {
   const all = [];
@@ -141,7 +167,7 @@ async function fetchListMoves(boardId, auth) {
     const batch = await trelloGet(`/boards/${boardId}/actions`, {
       ...auth,
       params: {
-        filter: 'updateCard:idList',
+        filter: 'updateCard:idList,updateCard:due,updateCard:dueChanged',
         limit: 100,
         page,
         fields: 'date,type,data',

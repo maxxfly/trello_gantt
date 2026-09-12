@@ -1,6 +1,8 @@
-.PHONY: install dev build preview clean
+.PHONY: install dev build preview clean distclean
 
-# Installation des dépendances (si absentes)
+# Installation des dépendances (React, html2canvas + jspdf pour l'export
+# PNG/PDF, Vite…). Relancée automatiquement dès que package.json ou
+# package-lock.json changent.
 install: node_modules/.installed
 
 node_modules/.installed: package.json package-lock.json

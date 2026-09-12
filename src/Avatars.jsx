@@ -30,7 +30,8 @@ function colorFor(str) {
 function hiResAvatar(url) {
   if (!url) return null;
   if (!/trello\.com\/1\/t\//.test(url)) return url;
-  if (/\/avatars\/[^/]+\/\d+\.png$/.test(url)) return url.replace(/\/\d+\.png$/, "/170.png");
+  if (/\/avatars\/[^/]+\/\d+\.png$/.test(url))
+    return url.replace(/\/\d+\.png$/, "/170.png");
   return url.replace(/\.png$/, "/170.png");
 }
 

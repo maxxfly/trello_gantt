@@ -10,7 +10,7 @@ export default function Legend({ lists }) {
   return (
     <div className="legend">
       <div className="legend__group">
-        <h3>Colonnes Trello (étapes)</h3>
+        <h3>Colonnes Trello = couleur des segments</h3>
         <ul>
           {lists.map((l, i) => (
             <li key={l.id}>
@@ -24,12 +24,8 @@ export default function Legend({ lists }) {
         </ul>
       </div>
       <div className="legend__group">
-        <h3>Segments de barre</h3>
+        <h3>Marques sur les barres</h3>
         <ul>
-          <li>
-            <span className="legend__swatch" style={{ background: "#4f8ef7" }} />
-            Période passée dans une colonne
-          </li>
           <li>
             <span className="legend__swatch legend__swatch--current" />
             Colonne actuelle (tâche en cours)
@@ -54,6 +50,10 @@ export default function Legend({ lists }) {
           <li>
             <span className="legend__swatch legend__swatch--diamond" />
             Échéance (due date)
+          </li>
+          <li>
+            <span className="legend__swatch legend__swatch--diamond-past" />
+            Ancienne échéance (repoussée)
           </li>
         </ul>
       </div>

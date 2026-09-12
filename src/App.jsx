@@ -1,25 +1,40 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchBoardData } from './trelloApi.js';
-import { buildGanttModel } from './ganttModel.js';
-import GanttChart from './GanttChart.jsx';
-import Legend from './Legend.jsx';
-import { getDemoData } from './demoData.js';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { fetchBoardData } from "./trelloApi.js";
+import { buildGanttModel } from "./ganttModel.js";
+import GanttChart from "./GanttChart.jsx";
+import Legend from "./Legend.jsx";
+import TagSelect from "./TagSelect.jsx";
+import { getDemoData } from "./demoData.js";
 
-const LS_PROFILES = 'gantt-trello-profiles';
-const LS_LAST = 'gantt-trello-last-profile';
-const LS_FILTER = 'gantt-trello-card-filter';
-const LS_PERIOD = 'gantt-trello-period';
+const LS_PROFILES = "gantt-trello-profiles";
+const LS_LAST = "gantt-trello-last-profile";
+const LS_FILTER = "gantt-trello-card-filter";
+const LS_PERIOD = "gantt-trello-period";
 
 const CARD_FILTERS = {
-  board: 'Du tableau',
-  archived: 'Archivées',
-  both: 'Les deux',
+  board: "Du tableau",
+  archived: "Archivées",
+  both: "Les deux",
 };
+
+/** Normalise pour la recherche : minuscules sans accents. */
+function normSearch(s) {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
 /** Applique le filtre cartes actives / archivées aux lignes du modèle. */
 function filterRows(rows, filter) {
-  if (filter === 'board') return rows.filter((r) => !r.closed);
-  if (filter === 'archived') return rows.filter((r) => r.closed);
+  if (filter === "board") return rows.filter((r) => !r.closed);
+  if (filter === "archived") return rows.filter((r) => r.closed);
   return rows;
 }
 
@@ -47,8 +62,131 @@ function filterRowsByPeriod(rows, from, to) {
   });
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Résumé par étape (colonne) : jours passés dans chaque colonne, calculés sur
+ * les lignes filtrées et écrêtés à la période choisie (si active).
+ * Retour : [{ listId, listName, color, days, tasks }] trié par ordre des colonnes.
+ */
+function summarizeByList(rows, lists, period) {
+  const f = parseDateInput(period.from);
+  const t = parseDateInput(period.to);
+  const tEnd = t ? new Date(t.getTime() + DAY_MS) : null; // exclusif
+  const acc = new Map();
+  for (const r of rows) {
+    for (const s of r.steps || []) {
+      let from = s.from.getTime();
+      let to = s.to.getTime();
+      if (f) from = Math.max(from, f.getTime());
+      if (tEnd) to = Math.min(to, tEnd.getTime());
+      const days = (to - from) / DAY_MS;
+      if (days <= 0) continue;
+      const e = acc.get(s.listId) || {
+        listId: s.listId,
+        listName: s.listName,
+        color: s.color,
+        days: 0,
+        tasks: new Set(),
+      };
+      e.days += days;
+      e.tasks.add(r.id);
+      acc.set(s.listId, e);
+    }
+  }
+  // Ordre des colonnes du board, puis colonnes inconnues à la fin.
+  const order = new Map(lists.map((l, i) => [l.id, i]));
+  return [...acc.values()]
+    .map((e) => ({ ...e, days: Math.round(e.days), tasks: e.tasks.size }))
+    .sort(
+      (a, b) => (order.get(a.listId) ?? 1e9) - (order.get(b.listId) ?? 1e9),
+    );
+}
+
 function uid() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+/** "YYYY-MM-DD" local (sans décalage UTC). */
+function ymd(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** Bornes rapides du filtre de période. */
+function periodPreset(kind) {
+  const now = new Date();
+  if (kind === "week") {
+    const mon = new Date(now);
+    mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    const sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    return { from: ymd(mon), to: ymd(sun) };
+  }
+  if (kind === "month") {
+    return {
+      from: ymd(new Date(now.getFullYear(), now.getMonth(), 1)),
+      to: ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+    };
+  }
+  // quarter
+  const q = Math.floor(now.getMonth() / 3);
+  return {
+    from: ymd(new Date(now.getFullYear(), q * 3, 1)),
+    to: ymd(new Date(now.getFullYear(), q * 3 + 3, 0)),
+  };
+}
+
+/** Export CSV (RFC 4180 : guillemets doublés, BOM pour Excel). */
+function exportCsv(rows) {
+  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const head = [
+    "Titre",
+    "Colonne",
+    "Debut",
+    "Fin",
+    "Echeance",
+    "Statut",
+    "Tags",
+    "Membres",
+    "Lien",
+  ];
+  const lines = [head.join(";")];
+  for (const r of rows) {
+    lines.push(
+      [
+        esc(r.name),
+        esc(r.listName),
+        esc(ymd(r.start)),
+        esc(ymd(r.end)),
+        esc(r.due ? ymd(r.due) : ""),
+        esc(r.closed ? "archivee" : r.done ? "terminee" : "en cours"),
+        esc((r.labels || []).map((l) => l.name).join(", ")),
+        esc((r.members || []).map((m) => m.fullName || m.username).join(", ")),
+        esc(r.url || ""),
+      ].join(";"),
+    );
+  }
+  const blob = new Blob(["\ufeff" + lines.join("\r\n")], {
+    type: "text/csv;charset=utf-8",
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `gantt-${ymd(new Date())}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 500);
+}
+
+/** Nom de fichier d'export (assaini). */
+function exportBaseName(title) {
+  const clean = (title || "gantt")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return `${clean || "gantt"}-${ymd(new Date())}`;
 }
 
 /** Charge les profils enregistrés (nom + tableau + token + clé d'API). */
@@ -60,16 +198,16 @@ function loadProfiles() {
       if (Array.isArray(list)) return list.filter((p) => p && p.id && p.name);
     }
     // Migration depuis l'ancien format (config unique, sans nom)
-    const legacy = localStorage.getItem('gantt-trello-config');
+    const legacy = localStorage.getItem("gantt-trello-config");
     if (legacy) {
       const p = JSON.parse(legacy);
       if (p && p.board && p.token) {
         const profile = {
           id: uid(),
-          name: 'Mon tableau',
+          name: "Mon tableau",
           board: p.board,
           token: p.token,
-          apiKey: p.apiKey || '',
+          apiKey: p.apiKey || "",
           updatedAt: new Date().toISOString(),
         };
         const migrated = [profile];
@@ -94,11 +232,13 @@ function saveProfiles(profiles) {
 
 export default function App() {
   const [profiles, setProfiles] = useState(loadProfiles);
-  const [selectedId, setSelectedId] = useState(() => localStorage.getItem(LS_LAST) || '');
-  const [name, setName] = useState('');
-  const [token, setToken] = useState('');
-  const [board, setBoard] = useState('');
-  const [apiKey, setApiKey] = useState('');
+  const [selectedId, setSelectedId] = useState(
+    () => localStorage.getItem(LS_LAST) || "",
+  );
+  const [name, setName] = useState("");
+  const [token, setToken] = useState("");
+  const [board, setBoard] = useState("");
+  const [apiKey, setApiKey] = useState("");
 
   const [model, setModel] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -106,25 +246,29 @@ export default function App() {
   const [lastLoaded, setLastLoaded] = useState(null);
   const [savedFlash, setSavedFlash] = useState(false);
   const [cardFilter, setCardFilter] = useState(
-    () => localStorage.getItem(LS_FILTER) || 'both'
+    () => localStorage.getItem(LS_FILTER) || "both",
   );
   // Période optionnelle { from, to } en format "YYYY-MM-DD" (vide = tout).
   const [period, setPeriod] = useState(() => {
     try {
-      const p = JSON.parse(localStorage.getItem(LS_PERIOD) || 'null');
-      if (p && (p.from || p.to)) return { from: p.from || '', to: p.to || '' };
+      const p = JSON.parse(localStorage.getItem(LS_PERIOD) || "null");
+      if (p && (p.from || p.to)) return { from: p.from || "", to: p.to || "" };
     } catch {
       /* ignore */
     }
-    return { from: '', to: '' };
+    return { from: "", to: "" };
   });
 
   // Évite l'auto-chargement lors du parcours des champs depuis les profils
   const firstRender = useRef(true);
 
+  // Conteneur du Gantt (pour la capture PNG/PDF) + état d'export en cours.
+  const ganttWrapRef = useRef(null);
+  const [exporting, setExporting] = useState(null); // 'png' | 'pdf' | null
+
   const selectedProfile = useMemo(
     () => profiles.find((p) => p.id === selectedId) || null,
-    [profiles, selectedId]
+    [profiles, selectedId],
   );
 
   // Lignes filtrées (actives / archivées / les deux) + compteurs pour le filtre.
@@ -134,19 +278,62 @@ export default function App() {
     return { open: model.rows.length - closed, closed };
   }, [model]);
 
+  // Filtre par tags : ensemble d'IDs sélectionnés (vide = aucun filtre).
+  const [labelFilter, setLabelFilter] = useState(() => new Set());
+  const allLabels = useMemo(() => {
+    if (!model) return [];
+    const byId = new Map();
+    for (const r of model.rows)
+      for (const l of r.labels || []) byId.set(l.id, l);
+    return [...byId.values()].sort((a, b) =>
+      (a.name || "").localeCompare(b.name || ""),
+    );
+  }, [model]);
+  const toggleLabel = (id) => {
+    setLabelFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Recherche libre : nom de carte, colonne, tag ou membre (insensible à la
+  // casse et aux accents).
+  const [search, setSearch] = useState("");
+
   const filteredModel = useMemo(() => {
     if (!model) return null;
     let rows = filterRows(model.rows, cardFilter);
     rows = filterRowsByPeriod(rows, period.from, period.to);
+    if (labelFilter.size > 0) {
+      // Une carte est gardée si elle porte AU MOINS UN des tags sélectionnés.
+      rows = rows.filter((r) =>
+        (r.labels || []).some((l) => labelFilter.has(l.id)),
+      );
+    }
+    const q = normSearch(search);
+    if (q) {
+      // Recherche sur le titre uniquement.
+      rows = rows.filter((r) => normSearch(r.name).includes(q));
+    }
     return { ...model, rows };
-  }, [model, cardFilter, period]);
+  }, [model, cardFilter, period, labelFilter, search]);
 
   const periodActive = !!(period.from || period.to);
+
+  // Résumé : jours cumulés par colonne (étape), sur les lignes affichées et
+  // écrêtés à la période choisie.
+  const summary = useMemo(() => {
+    if (!filteredModel) return [];
+    return summarizeByList(filteredModel.rows, model.lists, period);
+  }, [filteredModel, model, period]);
 
   const setPeriodPart = (key, value) => {
     setPeriod((p) => {
       const next = { ...p, [key]: value };
-      if (next.from || next.to) localStorage.setItem(LS_PERIOD, JSON.stringify(next));
+      if (next.from || next.to)
+        localStorage.setItem(LS_PERIOD, JSON.stringify(next));
       else localStorage.removeItem(LS_PERIOD);
       return next;
     });
@@ -154,8 +341,38 @@ export default function App() {
 
   const resetPeriod = () => {
     localStorage.removeItem(LS_PERIOD);
-    setPeriod({ from: '', to: '' });
+    setPeriod({ from: "", to: "" });
   };
+
+  const applyPreset = (kind) => {
+    const p = periodPreset(kind);
+    localStorage.setItem(LS_PERIOD, JSON.stringify(p));
+    setPeriod(p);
+  };
+
+  /** Lance une capture (PNG ou PDF) du Gantt affiché, avec garde anti-rentree. */
+  const runExport = useCallback(
+    async (kind) => {
+      const el = ganttWrapRef.current;
+      if (!el || exporting) return;
+      setExporting(kind);
+      setError(null);
+      try {
+        // html2canvas + jsPDF (~500 kB) sont chargés à la demande, pas au 1er rendu.
+        const { exportPng, exportPdf } = await import("./exportImage.js");
+        const base = exportBaseName(model?.title);
+        if (kind === "png") await exportPng(el, `${base}.png`);
+        else await exportPdf(el, `${base}.pdf`, model?.title || "Gantt");
+      } catch (e) {
+        setError(
+          `Export impossible : ${e.message || e}. (Les avatars distants peuvent bloquer la capture selon les en-têtes CORS de Trello — réessayez ou utilisez l'export CSV.)`,
+        );
+      } finally {
+        setExporting(null);
+      }
+    },
+    [exporting, model],
+  );
 
   const applyRaw = (raw) => {
     setModel(buildGanttModel(raw));
@@ -171,11 +388,13 @@ export default function App() {
   const saveProfile = useCallback(() => {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setError('Donnez un nom au profil avant d’enregistrer (ex : « Projet Alpha »).');
+      setError(
+        "Donnez un nom au profil avant d’enregistrer (ex : « Projet Alpha »).",
+      );
       return;
     }
     if (!board.trim()) {
-      setError('Renseignez l’URL ou l’ID du tableau avant d’enregistrer.');
+      setError("Renseignez l’URL ou l’ID du tableau avant d’enregistrer.");
       return;
     }
     const existing = profiles.find((p) => p.id === selectedId);
@@ -206,25 +425,26 @@ export default function App() {
       setSelectedId(id);
       localStorage.setItem(LS_LAST, id);
       setName(p.name);
-      setBoard(p.board || '');
-      setToken(p.token || '');
-      setApiKey(p.apiKey || '');
+      setBoard(p.board || "");
+      setToken(p.token || "");
+      setApiKey(p.apiKey || "");
       setError(null);
     },
-    [profiles]
+    [profiles],
   );
 
   const deleteProfile = useCallback(() => {
     if (!selectedId) return;
-    if (!window.confirm(`Supprimer le profil « ${name} » de ce navigateur ?`)) return;
+    if (!window.confirm(`Supprimer le profil « ${name} » de ce navigateur ?`))
+      return;
     const next = profiles.filter((p) => p.id !== selectedId);
     persistProfiles(next);
-    setSelectedId('');
+    setSelectedId("");
     localStorage.removeItem(LS_LAST);
-    setName('');
-    setBoard('');
-    setToken('');
-    setApiKey('');
+    setName("");
+    setBoard("");
+    setToken("");
+    setApiKey("");
     setModel(null);
   }, [profiles, selectedId, name, persistProfiles]);
 
@@ -275,11 +495,11 @@ export default function App() {
     if (p) {
       setSelectedId(p.id);
       setName(p.name);
-      setBoard(p.board || '');
-      setToken(p.token || '');
-      setApiKey(p.apiKey || '');
+      setBoard(p.board || "");
+      setToken(p.token || "");
+      setApiKey(p.apiKey || "");
       if (p.token && p.board) {
-        fetchBoardData(p.board, p.token, p.apiKey || '')
+        fetchBoardData(p.board, p.token, p.apiKey || "")
           .then((raw) => {
             applyRaw(raw);
           })
@@ -339,7 +559,11 @@ export default function App() {
                 disabled={loading}
                 title="Enregistrer ce profil dans ce navigateur (localStorage)"
               >
-                {savedFlash ? '✓ Enregistré' : selectedProfile ? 'Mettre à jour' : 'Enregistrer'}
+                {savedFlash
+                  ? "✓ Enregistré"
+                  : selectedProfile
+                    ? "Mettre à jour"
+                    : "Enregistrer"}
               </button>
               {selectedProfile && (
                 <button
@@ -389,44 +613,57 @@ export default function App() {
             />
           </label>
           <button className="app__submit" type="submit" disabled={loading}>
-            {loading ? 'Chargement…' : 'Afficher le Gantt'}
+            {loading ? "Chargement…" : "Afficher le Gantt"}
           </button>
-          <button className="app__demo" type="button" onClick={loadDemo} disabled={loading}>
+          <button
+            className="app__demo"
+            type="button"
+            onClick={loadDemo}
+            disabled={loading}
+          >
             Démo
           </button>
         </form>
       </header>
 
       <div className="app__hint">
-        <strong>Profils :</strong> nommez, enregistrez et retrouvez vos tableaux (avec token et clé
-        d'API) directement dans ce navigateur (localStorage). Le dernier profil utilisé est
-        rechargé automatiquement à l'ouverture, et « Afficher le Gantt » met à jour le profil
-        sélectionné. Attention : le token est enregistré en clair dans ce navigateur — ne l'utilisez
-        que sur un poste de confiance.
+        <strong>Profils :</strong> nommez, enregistrez et retrouvez vos tableaux
+        (avec token et clé d'API) directement dans ce navigateur (localStorage).
+        Le dernier profil utilisé est rechargé automatiquement à l'ouverture, et
+        « Afficher le Gantt » met à jour le profil sélectionné. Attention : le
+        token est enregistré en clair dans ce navigateur — ne l'utilisez que sur
+        un poste de confiance.
       </div>
 
       <div className="app__hint">
-        <strong>Comment obtenir un token ?</strong> Créez une clé d'API sur{' '}
-        <a href="https://trello.com/power-ups/admin" target="_blank" rel="noreferrer">
+        <strong>Comment obtenir un token ?</strong> Créez une clé d'API sur{" "}
+        <a
+          href="https://trello.com/power-ups/admin"
+          target="_blank"
+          rel="noreferrer"
+        >
           trello.com/power-ups/admin
         </a>
-        , puis générez un token en lecture seule via l'URL{' '}
+        , puis générez un token en lecture seule via l'URL{" "}
         <code>
           https://trello.com/1/authorize?expiration=never&amp;scope=read&amp;response_type=token&amp;key=VOTRE_CLE
         </code>
-        . Les identifiants sont stockés uniquement dans votre navigateur et transmis directement à
-        l'API Trello. Vous pouvez aussi cliquer sur <strong>Démo</strong> pour voir un exemple sans
-        compte.
+        . Les identifiants sont stockés uniquement dans votre navigateur et
+        transmis directement à l'API Trello. Vous pouvez aussi cliquer sur{" "}
+        <strong>Démo</strong> pour voir un exemple sans compte.
       </div>
 
       <div className="app__hint">
-        <strong>Lecture des dates :</strong> la date de <strong>début</strong> d'une tâche correspond
-        à sa date de début Trello si elle existe, sinon à sa <strong>date de création</strong>. Une
-        tâche <strong>non terminée</strong> (ni archivée, ni dans la dernière colonne) se prolonge
-        jusqu'à <strong>aujourd'hui</strong>. Les <strong>étapes</strong> correspondent aux
-        <strong> changements de colonne</strong> de la carte (historique Trello) : chaque segment
-        coloré représente le temps passé dans une colonne, le dernier segment hachuré est la colonne
-        actuelle. Cliquez sur le nom d'une tâche pour l'ouvrir dans Trello.
+        <strong>Lecture des dates :</strong> la date de <strong>début</strong>{" "}
+        d'une tâche correspond à sa date de début Trello si elle existe, sinon à
+        sa <strong>date de création</strong>. Une tâche{" "}
+        <strong>non terminée</strong> (ni archivée, ni dans la dernière colonne)
+        se prolonge jusqu'à <strong>aujourd'hui</strong>. Les{" "}
+        <strong>étapes</strong> correspondent aux
+        <strong> changements de colonne</strong> de la carte (historique Trello)
+        : chaque segment coloré représente le temps passé dans une colonne, le
+        dernier segment hachuré est la colonne actuelle. Cliquez sur le nom
+        d'une tâche pour l'ouvrir dans Trello.
       </div>
 
       {error && (
@@ -438,14 +675,33 @@ export default function App() {
       {model && (
         <>
           <Legend lists={model.lists} />
-          <GanttChart model={filteredModel} />
+          <div ref={ganttWrapRef}>
+            <GanttChart model={filteredModel} />
+          </div>
           <footer className="app__footer">
-            <div className="app__filter" role="group" aria-label="Filtre des cartes">
+            <div className="app__search">
+              <span className="app__field-icon" aria-hidden>
+                🔎
+              </span>
+              <input
+                type="search"
+                placeholder="Rechercher un titre…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                spellCheck={false}
+                aria-label="Recherche dans les tâches"
+              />
+            </div>
+            <div
+              className="app__filter"
+              role="group"
+              aria-label="Filtre des cartes"
+            >
               {Object.entries(CARD_FILTERS).map(([key, label]) => (
                 <button
                   key={key}
                   type="button"
-                  className={`app__filter-btn${cardFilter === key ? ' app__filter-btn--active' : ''}`}
+                  className={`app__filter-btn${cardFilter === key ? " app__filter-btn--active" : ""}`}
                   onClick={() => {
                     setCardFilter(key);
                     localStorage.setItem(LS_FILTER, key);
@@ -453,23 +709,36 @@ export default function App() {
                 >
                   {label}
                   <span className="app__filter-count">
-                    {key === 'board'
+                    {key === "board"
                       ? counts.open
-                      : key === 'archived'
+                      : key === "archived"
                         ? counts.closed
                         : model.rows.length}
                   </span>
                 </button>
               ))}
             </div>
-            <div className="app__period" role="group" aria-label="Filtre par période">
+            <TagSelect
+              labels={allLabels}
+              selected={labelFilter}
+              onToggle={toggleLabel}
+              onClear={() => setLabelFilter(new Set())}
+            />
+            <div
+              className="app__period"
+              role="group"
+              aria-label="Filtre par période"
+            >
+              <span className="app__field-icon" aria-hidden>
+                📅
+              </span>
               <label>
                 Du
                 <input
                   type="date"
                   value={period.from}
                   max={period.to || undefined}
-                  onChange={(e) => setPeriodPart('from', e.target.value)}
+                  onChange={(e) => setPeriodPart("from", e.target.value)}
                 />
               </label>
               <label>
@@ -478,28 +747,125 @@ export default function App() {
                   type="date"
                   value={period.to}
                   min={period.from || undefined}
-                  onChange={(e) => setPeriodPart('to', e.target.value)}
+                  onChange={(e) => setPeriodPart("to", e.target.value)}
                 />
               </label>
+              <span className="app__period-presets">
+                <button
+                  type="button"
+                  className="app__preset"
+                  onClick={() => applyPreset("week")}
+                  title="Semaine en cours (lundi → dimanche)"
+                >
+                  Semaine
+                </button>
+                <button
+                  type="button"
+                  className="app__preset"
+                  onClick={() => applyPreset("month")}
+                  title="Mois en cours"
+                >
+                  Mois
+                </button>
+                <button
+                  type="button"
+                  className="app__preset"
+                  onClick={() => applyPreset("quarter")}
+                  title="Trimestre en cours"
+                >
+                  Trimestre
+                </button>
+              </span>
               {periodActive && (
-                <button type="button" className="app__period-reset" onClick={resetPeriod}>
+                <button
+                  type="button"
+                  className="app__period-reset"
+                  onClick={resetPeriod}
+                >
                   ✕ Réinitialiser
                 </button>
               )}
             </div>
-            {filteredModel.rows.length} tâche(s) affichée(s) sur {model.rows.length}{' '}
-            {lastLoaded ? `· chargées le ${lastLoaded.toLocaleString('fr-FR')}` : ''}
+            <div className="app__exports" role="group" aria-label="Exporter">
+              <button
+                className="app__export"
+                type="button"
+                onClick={() => runExport("png")}
+                disabled={!!exporting}
+                title="Exporter le Gantt affiché en image PNG (tout le contenu, même hors écran)"
+              >
+                {exporting === "png" ? "…" : "🖼️ PNG"}
+              </button>
+              <button
+                className="app__export"
+                type="button"
+                onClick={() => runExport("pdf")}
+                disabled={!!exporting}
+                title="Exporter le Gantt affiché en PDF paysage (multipage si nécessaire)"
+              >
+                {exporting === "pdf" ? "…" : "📄 PDF"}
+              </button>
+              <button
+                className="app__export"
+                type="button"
+                onClick={() => exportCsv(filteredModel.rows)}
+                title="Exporter les tâches affichées (filtres appliqués) en CSV"
+              >
+                📋 CSV
+              </button>
+            </div>
+            {filteredModel.rows.length} tâche(s) affichée(s) sur{" "}
+            {model.rows.length}{" "}
+            {lastLoaded
+              ? `· chargées le ${lastLoaded.toLocaleString("fr-FR")}`
+              : ""}
             <button className="app__refresh" onClick={load} disabled={loading}>
               Actualiser
             </button>
           </footer>
+
+          {summary.length > 0 && (
+            <div className="app__summary" aria-label="Résumé par étape">
+              <span className="app__summary-title">
+                Jours par étape{periodActive ? " (sur la période)" : ""}
+              </span>
+              <div className="app__summary-bar">
+                {summary.map((s) => {
+                  const total = summary.reduce((a, b) => a + b.days, 0) || 1;
+                  return (
+                    <span
+                      key={s.listId}
+                      className="app__summary-seg"
+                      style={{
+                        width: `${(s.days / total) * 100}%`,
+                        background: s.color,
+                      }}
+                      title={`${s.listName} : ${s.days} j (${s.tasks} tâche(s))`}
+                    />
+                  );
+                })}
+              </div>
+              <ul className="app__summary-list">
+                {summary.map((s) => (
+                  <li key={s.listId}>
+                    <span
+                      className="legend__swatch"
+                      style={{ background: s.color }}
+                    />
+                    {s.listName} : <strong>{s.days} j</strong>
+                    <em> · {s.tasks} tâche(s)</em>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </>
       )}
 
       {!model && !error && !loading && (
         <div className="app__placeholder">
-          Renseignez l'URL de votre tableau et votre token ci-dessus, puis cliquez sur « Afficher le
-          Gantt » — ou sur « Démo » pour un exemple.
+          Renseignez l'URL de votre tableau et votre token ci-dessus, puis
+          cliquez sur « Afficher le Gantt » — ou sur « Démo » pour un exemple.
         </div>
       )}
     </div>
