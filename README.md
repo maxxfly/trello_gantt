@@ -39,7 +39,8 @@ drop the contents of `dist/` into any subdirectory of your web server (e.g.
 ## Usage
 
 1. Fill in **Board**: the full URL (`https://trello.com/b/xxxx/my-board`) or the board ID.
-2. Fill in **User token** (and optionally the **API key**).
+2. Fill in the **API key**, click **🔗 Autoriser l'application**, and approve on Trello — the
+   user token is captured and saved automatically (no token field to fill by hand).
 3. Click **Show Gantt**.
 
 You can **save** the board + token + API key under a **name** as a profile. Profiles are

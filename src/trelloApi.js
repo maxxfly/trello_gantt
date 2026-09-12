@@ -31,15 +31,24 @@ async function trelloGet(path, { apiKey, token, params = {} }) {
   search.set('token', token);
   const res = await fetch(`${API_BASE}${path}?${search.toString()}`);
   if (!res.ok) {
+    // Trello renvoie parfois du JSON {"message": ...}, parfois du texte brut ("invalid key")
     let detail = '';
+    const body = await res.text().catch(() => '');
     try {
-      detail = (await res.json())?.message || '';
+      detail = JSON.parse(body)?.message || body;
     } catch {
-      /* réponse non-JSON */
+      detail = body;
+    }
+    detail = (detail || '').trim().slice(0, 200);
+
+    if (detail === 'invalid key' || /invalid key/i.test(detail)) {
+      throw new Error(
+        `Clé d'API inconnue de Trello (« invalid key »). Vérifiez le champ « Clé d'API » : il doit contenir la clé hexadécimale de 32 caractères affichée dans trello.com/power-ups/admin → onglet « Clé d'API » — et NON le « Secret ». Si la clé a été régénérée depuis, copiez la nouvelle.`
+      );
     }
     if (res.status === 401 || res.status === 403) {
       throw new Error(
-        `Token refusé par Trello (${res.status}) : vérifiez que le champ « Token utilisateur » contient bien un token obtenu via « Obtenir le token » (trello.com/1/authorize) et NON le « Secret » de trello.com/power-ups/admin.${detail ? ' ' + detail : ''}`
+        `Accès refusé par Trello (${res.status}) : le token est invalide, révoqué, ou lié à un compte qui ne voit pas ce tableau. Cliquez sur « Autoriser l'application » avec le bon compte Trello pour régénérer un token.${detail ? ' ' + detail : ''}`
       );
     }
     if (res.status === 404) {
@@ -60,7 +69,7 @@ async function trelloGet(path, { apiKey, token, params = {} }) {
  * @param {string} [apiKey] - clé d'API « key » du Power-Up (optionnelle pour l'usage personnel)
  */
 export async function fetchBoardData(boardInput, token, apiKey = '') {
-  if (!token || !token.trim()) throw new Error('Le champ « Token utilisateur » est vide.');
+  if (!token || !token.trim()) throw new Error('Aucun token Trello : cliquez sur « Autoriser l\u2019application » (ou utilisez la saisie manuelle).');
   const boardId = extractBoardId(boardInput);
   const auth = { apiKey: apiKey.trim(), token: token.trim() };
 

@@ -66,6 +66,8 @@ export default function App() {
   const [error, setError] = useState(null);
   const [lastLoaded, setLastLoaded] = useState(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [justAuthorized, setJustAuthorized] = useState(false);
+  const [showManual, setShowManual] = useState(false);
 
   // Évite l'auto-chargement lors du parcours des champs depuis les profils
   const firstRender = useRef(true);
@@ -184,16 +186,23 @@ export default function App() {
   }, []);
 
   /**
-   * Ouvre la page d'autorisation Trello dans une popup et récupère automatiquement
-   * le token utilisateur renvoyé en fragment (#token=...) sur return_url.
+   * Ouvre la page d'autorisation Trello dans une popup. Une fois l'utilisateur
+   * sur « Autoriser », Trello renvoie #token=... sur cette app ; la popup (qui
+   * est une instance de cette même app) transmet le token via postMessage.
    * ⚠️ Nécessite que l'origine de l'app figure dans « Origines autorisées » du
-   * Power-Up (trello.com/power-ups/admin → Clé d'API). Sinon, utiliser le lien manuel.
+   * Power-Up (trello.com/power-ups/admin → Clé d'API).
    */
   const requestToken = useCallback(() => {
     const key = apiKey.trim();
     if (!key) {
       setError(
-        "Saisissez d'abord la « Clé d'API » (champ « Clé d'API » de trello.com/power-ups/admin — PAS le « Secret »), puis recliquez sur « Obtenir le token »."
+        "Saisissez d'abord la « Clé d'API » (champ « Clé d'API » de trello.com/power-ups/admin — PAS le « Secret »), puis recliquez sur « Autoriser l'application »."
+      );
+      return;
+    }
+    if (!/^[0-9a-f]{32}$/i.test(key)) {
+      setError(
+        `« Clé d'API » invalide (${key.length} caractère(s)). Elle doit être une suite hexadécimale de 32 caractères, sans espace — vérifiez qu'il s'agit bien de la « Clé d'API » et non du « Secret ».`
       );
       return;
     }
@@ -205,10 +214,11 @@ export default function App() {
       `&return_url=${encodeURIComponent(returnUrl)}&callback_method=fragment`;
     const popup = window.open(url, 'trello-authorize', 'popup=yes,width=640,height=720');
     if (!popup) {
-      // Popup bloquée : ouvrir dans un onglet, l'utilisateur copiera le token lui-même
-      window.open(url, '_blank', 'noopener');
+      // Popup bloquée : ouvrir dans un onglet — le token sera capté au retour sur cette page
+      window.open(url, '_blank');
       return;
     }
+    // Filet de sécurité : si postMessage n'arrive pas, lire l'URL de la popup dès le retour
     const timer = setInterval(() => {
       if (popup.closed) {
         clearInterval(timer);
@@ -229,9 +239,26 @@ export default function App() {
           /* déjà fermée */
         }
         setToken(decodeURIComponent(match[1]));
+        setJustAuthorized(true);
+        setTimeout(() => setJustAuthorized(false), 2500);
       }
     }, 300);
   }, [apiKey]);
+
+  // Réception du token renvoyé par la popup « Autoriser l'application » (postMessage)
+  useEffect(() => {
+    const onMessage = (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data && event.data.type === 'trello-auth-token' && typeof event.data.token === 'string') {
+        setToken(event.data.token);
+        setError(null);
+        setJustAuthorized(true);
+        setTimeout(() => setJustAuthorized(false), 2500);
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
 
   // Au premier rendu : pré-charge le dernier profil et lance le chargement
   useEffect(() => {
@@ -240,8 +267,19 @@ export default function App() {
     // Si la page d'autorisation Trello a redirigé cette fenêtre (#token=...), on récupère le token
     const hash = window.location.hash;
     const tokenMatch = hash.match(/[#&]token=([^&]+)/);
+    let capturedToken = null;
     if (tokenMatch) {
-      setToken(decodeURIComponent(tokenMatch[1]));
+      capturedToken = decodeURIComponent(tokenMatch[1]);
+      setToken(capturedToken);
+      // Ouverte en popup par « Autoriser l'application » : on transmet le token à la fenêtre parente
+      if (window.opener && window.opener !== window) {
+        try {
+          window.opener.postMessage({ type: 'trello-auth-token', token: capturedToken }, window.location.origin);
+        } catch {
+          /* fenêtre parente injoignable */
+        }
+        window.close();
+      }
       // Nettoie l'URL (le token ne doit pas rester dans l'historique)
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
     }
@@ -252,10 +290,11 @@ export default function App() {
       setSelectedId(p.id);
       setName(p.name);
       setBoard(p.board || '');
-      setToken(p.token || '');
+      // Ne pas écraser un token fraîchement autorisé par celui du profil (souvent obsolète)
+      if (!capturedToken) setToken(p.token || '');
       setApiKey(p.apiKey || '');
-      if (p.token && p.board) {
-        fetchBoardData(p.board, p.token, p.apiKey || '')
+      if ((capturedToken || p.token) && p.board) {
+        fetchBoardData(p.board, capturedToken || p.token, p.apiKey || '')
           .then((raw) => {
             applyRaw(raw);
           })
@@ -342,20 +381,6 @@ export default function App() {
           </label>
           <label className="app__field">
             <span>
-              Token utilisateur Trello <em>(≠ le « Secret » du Power-Up)</em>
-            </span>
-            <input
-              type="password"
-              placeholder="collez ici le token renvoyé par trello.com/1/authorize"
-              title="Le token utilisateur obtenu via la page d'autorisation Trello (bouton « Obtenir le token »). Le « Secret » affiché dans power-ups/admin ne fonctionne PAS ici."
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              spellCheck={false}
-              autoComplete="off"
-            />
-          </label>
-          <label className="app__field">
-            <span>
               Clé d'API <em>(champ « Clé d'API », pas « Secret »)</em>
             </span>
             <input
@@ -368,15 +393,48 @@ export default function App() {
               autoComplete="off"
             />
           </label>
-          <button
-            className="app__token"
-            type="button"
-            onClick={requestToken}
-            disabled={loading}
-            title="Ouvre trello.com/1/authorize et récupère le token automatiquement. Requis : ajouter l'adresse de cette app dans « Origines autorisées » du Power-Up."
-          >
-            🔑 Obtenir le token
-          </button>
+          <div className="app__auth">
+            <button
+              className="app__token"
+              type="button"
+              onClick={requestToken}
+              disabled={loading}
+              title="Ouvre trello.com/1/authorize et récupère le token automatiquement. Requis : ajouter l'adresse de cette app dans « Origines autorisées » du Power-Up."
+            >
+              {token && !justAuthorized ? '♻️ Reconnecter à Trello' : '🔗 Autoriser l\u2019application'}
+            </button>
+            {token && (
+              <span className={`app__auth-status${justAuthorized ? ' app__auth-status--ok' : ''}`}>
+                {justAuthorized
+                  ? '✓ Autorisation reçue'
+                  : '✓ Token enregistré — prêt à charger'}
+              </span>
+            )}
+            {!token && (
+              <button
+                className="app__manual"
+                type="button"
+                onClick={() => setShowManual((v) => !v)}
+              >
+                {showManual ? 'Masquer la saisie manuelle' : 'Saisie manuelle du token'}
+              </button>
+            )}
+          </div>
+          {showManual && !token && (
+            <label className="app__field app__field--board">
+              <span>
+                Token <em>(obtenu manuellement via trello.com/1/authorize)</em>
+              </span>
+              <input
+                type="password"
+                placeholder="collez ici le token renvoyé par la page d'autorisation"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </label>
+          )}
           <button className="app__submit" type="submit" disabled={loading}>
             {loading ? 'Chargement…' : 'Afficher le Gantt'}
           </button>
@@ -395,7 +453,7 @@ export default function App() {
       </div>
 
       <div className="app__hint">
-        <strong>Comment obtenir la clé et le token ?</strong>
+        <strong>Comment connecter votre compte Trello ?</strong>
         <ol className="app__steps">
           <li>
             Sur{' '}
@@ -409,16 +467,13 @@ export default function App() {
           <li>
             Dans ce même onglet, ajoutez l'adresse de cette application (ex.{' '}
             <code>http://localhost:5173</code> ou votre domaine) dans «{' '}
-            <strong>Origines autorisées</strong> » — sinon Trello refusera la redirection.
+            <strong>Origines autorisées</strong> » — sinon Trello affiche « App not found » ou
+            refuse la redirection.
           </li>
           <li>
-            Cliquez sur <strong>🔑 Obtenir le token</strong> : une page Trello s'ouvre, cliquez{' '}
-            <strong>« Autoriser »</strong> et le <strong>token utilisateur</strong> sera rempli
-            automatiquement. (Sinon, ouvrez manuellement{' '}
-            <code>
-              https://trello.com/1/authorize?expiration=never&amp;scope=read&amp;response_type=token&amp;key=VOTRE_CLE
-            </code>{' '}
-            et copiez le token affiché.)
+            Cliquez sur <strong>🔗 Autoriser l'application</strong>, vérifiez que vous êtes bien
+            connecté au <strong>compte qui voit le tableau</strong>, puis cliquez{' '}
+            <strong>« Autoriser »</strong>. Le token est récupéré et enregistré automatiquement.
           </li>
         </ol>
         <p>
@@ -458,8 +513,9 @@ export default function App() {
 
       {!model && !error && !loading && (
         <div className="app__placeholder">
-          Renseignez l'URL de votre tableau et votre token ci-dessus, puis cliquez sur « Afficher le
-          Gantt » — ou sur « Démo » pour un exemple.
+          Renseignez l'URL de votre tableau, saisissez votre clé d'API puis cliquez sur
+          « Autoriser l'application », puis sur « Afficher le Gantt » — ou sur « Démo » pour un
+          exemple.
         </div>
       )}
     </div>
