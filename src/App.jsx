@@ -183,10 +183,68 @@ export default function App() {
     applyRaw(getDemoData());
   }, []);
 
+  /**
+   * Ouvre la page d'autorisation Trello dans une popup et récupère automatiquement
+   * le token utilisateur renvoyé en fragment (#token=...) sur return_url.
+   * ⚠️ Nécessite que l'origine de l'app figure dans « Origines autorisées » du
+   * Power-Up (trello.com/power-ups/admin → Clé d'API). Sinon, utiliser le lien manuel.
+   */
+  const requestToken = useCallback(() => {
+    const key = apiKey.trim();
+    if (!key) {
+      setError(
+        "Saisissez d'abord la « Clé d'API » (champ « Clé d'API » de trello.com/power-ups/admin — PAS le « Secret »), puis recliquez sur « Obtenir le token »."
+      );
+      return;
+    }
+    setError(null);
+    const returnUrl = `${window.location.origin}${window.location.pathname}`;
+    const url =
+      'https://trello.com/1/authorize?expiration=never&scope=read&response_type=token' +
+      `&key=${encodeURIComponent(key)}` +
+      `&return_url=${encodeURIComponent(returnUrl)}&callback_method=fragment`;
+    const popup = window.open(url, 'trello-authorize', 'popup=yes,width=640,height=720');
+    if (!popup) {
+      // Popup bloquée : ouvrir dans un onglet, l'utilisateur copiera le token lui-même
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
+    const timer = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(timer);
+        return;
+      }
+      let href = '';
+      try {
+        href = popup.location.href; // lisible seulement une fois revenu sur notre origine
+      } catch {
+        return; // encore sur trello.com, on attend
+      }
+      const match = href.match(/[#&]token=([^&]+)/);
+      if (match) {
+        clearInterval(timer);
+        try {
+          popup.close();
+        } catch {
+          /* déjà fermée */
+        }
+        setToken(decodeURIComponent(match[1]));
+      }
+    }, 300);
+  }, [apiKey]);
+
   // Au premier rendu : pré-charge le dernier profil et lance le chargement
   useEffect(() => {
     if (!firstRender.current) return;
     firstRender.current = false;
+    // Si la page d'autorisation Trello a redirigé cette fenêtre (#token=...), on récupère le token
+    const hash = window.location.hash;
+    const tokenMatch = hash.match(/[#&]token=([^&]+)/);
+    if (tokenMatch) {
+      setToken(decodeURIComponent(tokenMatch[1]));
+      // Nettoie l'URL (le token ne doit pas rester dans l'historique)
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
     const saved = loadProfiles();
     const lastId = localStorage.getItem(LS_LAST);
     const p = saved.find((x) => x.id === lastId);
@@ -283,10 +341,13 @@ export default function App() {
             />
           </label>
           <label className="app__field">
-            <span>Token</span>
+            <span>
+              Token utilisateur Trello <em>(≠ le « Secret » du Power-Up)</em>
+            </span>
             <input
               type="password"
-              placeholder="token API Trello"
+              placeholder="collez ici le token renvoyé par trello.com/1/authorize"
+              title="Le token utilisateur obtenu via la page d'autorisation Trello (bouton « Obtenir le token »). Le « Secret » affiché dans power-ups/admin ne fonctionne PAS ici."
               value={token}
               onChange={(e) => setToken(e.target.value)}
               spellCheck={false}
@@ -295,17 +356,27 @@ export default function App() {
           </label>
           <label className="app__field">
             <span>
-              Clé d'API <em>(optionnelle)</em>
+              Clé d'API <em>(champ « Clé d'API », pas « Secret »)</em>
             </span>
             <input
               type="text"
-              placeholder="clé d'API du Power-Up"
+              placeholder="ex : 99006a4b49f5…"
+              title="Onglet « Clé d'API » de trello.com/power-ups/admin : copiez la valeur de « Clé d'API » (et non celle de « Secret »)."
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               spellCheck={false}
               autoComplete="off"
             />
           </label>
+          <button
+            className="app__token"
+            type="button"
+            onClick={requestToken}
+            disabled={loading}
+            title="Ouvre trello.com/1/authorize et récupère le token automatiquement. Requis : ajouter l'adresse de cette app dans « Origines autorisées » du Power-Up."
+          >
+            🔑 Obtenir le token
+          </button>
           <button className="app__submit" type="submit" disabled={loading}>
             {loading ? 'Chargement…' : 'Afficher le Gantt'}
           </button>
@@ -324,17 +395,37 @@ export default function App() {
       </div>
 
       <div className="app__hint">
-        <strong>Comment obtenir un token ?</strong> Créez une clé d'API sur{' '}
-        <a href="https://trello.com/power-ups/admin" target="_blank" rel="noreferrer">
-          trello.com/power-ups/admin
-        </a>
-        , puis générez un token en lecture seule via l'URL{' '}
-        <code>
-          https://trello.com/1/authorize?expiration=never&amp;scope=read&amp;response_type=token&amp;key=VOTRE_CLE
-        </code>
-        . Les identifiants sont stockés uniquement dans votre navigateur et transmis directement à
-        l'API Trello. Vous pouvez aussi cliquer sur <strong>Démo</strong> pour voir un exemple sans
-        compte.
+        <strong>Comment obtenir la clé et le token ?</strong>
+        <ol className="app__steps">
+          <li>
+            Sur{' '}
+            <a href="https://trello.com/power-ups/admin" target="_blank" rel="noreferrer">
+              trello.com/power-ups/admin
+            </a>
+            , ouvrez votre Power-Up → onglet « Clé d'API » : copiez la valeur du champ{' '}
+            <strong>« Clé d'API »</strong> (le champ <strong>« Secret » ne sert pas ici</strong> —
+            il est réservé à OAuth et aux webhooks).
+          </li>
+          <li>
+            Dans ce même onglet, ajoutez l'adresse de cette application (ex.{' '}
+            <code>http://localhost:5173</code> ou votre domaine) dans «{' '}
+            <strong>Origines autorisées</strong> » — sinon Trello refusera la redirection.
+          </li>
+          <li>
+            Cliquez sur <strong>🔑 Obtenir le token</strong> : une page Trello s'ouvre, cliquez{' '}
+            <strong>« Autoriser »</strong> et le <strong>token utilisateur</strong> sera rempli
+            automatiquement. (Sinon, ouvrez manuellement{' '}
+            <code>
+              https://trello.com/1/authorize?expiration=never&amp;scope=read&amp;response_type=token&amp;key=VOTRE_CLE
+            </code>{' '}
+            et copiez le token affiché.)
+          </li>
+        </ol>
+        <p>
+          Les identifiants sont stockés uniquement dans votre navigateur et transmis directement à
+          l'API Trello. Vous pouvez aussi cliquer sur <strong>Démo</strong> pour voir un exemple sans
+          compte.
+        </p>
       </div>
 
       <div className="app__hint">

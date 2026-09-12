@@ -39,7 +39,7 @@ drop the contents of `dist/` into any subdirectory of your web server (e.g.
 ## Usage
 
 1. Fill in **Board**: the full URL (`https://trello.com/b/xxxx/my-board`) or the board ID.
-2. Fill in **Token** (and optionally the **API key**).
+2. Fill in **User token** (and optionally the **API key**).
 3. Click **Show Gantt**.
 
 You can **save** the board + token + API key under a **name** as a profile. Profiles are
@@ -48,12 +48,37 @@ restored (and reloaded) automatically on the next visit.
 
 A **Demo** button shows a fictional dataset — no Trello account required.
 
-### Getting a token
+### Getting the API key and the token
 
-1. Create an API key at <https://trello.com/power-ups/admin>.
-2. Generate a read-only token via:
+Trello's admin panel (*trello.com/power-ups/admin* → **API key** tab) shows two fields,
+**Key** and **Secret**. That pair is *not* what the REST API accepts for a plain request.
+There are two separate mechanisms in Trello's docs:
+
+| Mechanism | Credentials | Used by this app |
+| --- | --- | --- |
+| **Legacy token auth** ([docs](https://developer.atlassian.com/cloud/trello/guides/rest-api/authorization/)) | `key=` + `token=` query params, where `token` is a **user token** from `1/authorize` | ✅ yes |
+| **OAuth 1.0a** (same page, "Using Basic OAuth") | key + **application secret**, HMAC-signed requests | ❌ no |
+| **OAuth 2.0 (3LO)** ([RFC-89](https://community.developer.atlassian.com/t/rfc-89-introducing-oauth2-to-trello/90359), replacing the above) | client id + secret, auth-code + PKCE, `Authorization: Bearer` | ❌ no |
+
+The doc's own example for the mechanism this app uses:
+
+```
+curl https://api.trello.com/1/members/me?key={{apiKey}}&token={{apiToken}}
+```
+
+So the **secret is not a substitute for the token** — sending it as `token=` returns
+`401 invalid token`. It is only needed to sign OAuth requests and to verify webhook
+callbacks, neither of which a browser-only app can do.
+
+1. Create a Power-Up at <https://trello.com/power-ups/admin> → **API key** tab, and copy the
+   field labelled **« Clé d'API » / "API key"**.
+2. In that same tab, add this app's address (e.g. `http://localhost:5173`, or your deployed
+   domain) under **« Origines autorisées » / "Allowed origins"** — otherwise Trello blocks the
+   token redirect.
+3. Click **🔑 Obtenir le token** in the app, press **Allow / Autoriser** on the Trello page, and
+   the **user token** is filled in automatically. (Manual fallback: open
    `https://trello.com/1/authorize?expiration=never&scope=read&response_type=token&key=YOUR_KEY`
-3. Copy the token shown.
+   and copy the token shown.)
 
 Credentials are stored only in your browser's `localStorage` and sent directly to the
 Trello API — there is no intermediary server.

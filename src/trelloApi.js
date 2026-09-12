@@ -1,5 +1,7 @@
 // Client pour l'API REST de Trello (https://developer.atlassian.com/cloud/trello/rest/)
-// Requêtes GET en JSON, token passé en paramètre d'URL.
+// Requêtes GET en JSON, authentification via les paramètres d'URL « key » (clé d'API)
+// et « token » (token utilisateur). Le « secret » du Power-Up ne sert pas ici
+// (il est réservé à OAuth 1.0 et aux webhooks).
 
 const API_BASE = 'https://api.trello.com/1';
 
@@ -37,7 +39,7 @@ async function trelloGet(path, { apiKey, token, params = {} }) {
     }
     if (res.status === 401 || res.status === 403) {
       throw new Error(
-        `Token Trello invalide ou permissions insuffisantes (${res.status}).${detail ? ' ' + detail : ''}`
+        `Token refusé par Trello (${res.status}) : vérifiez que le champ « Token utilisateur » contient bien un token obtenu via « Obtenir le token » (trello.com/1/authorize) et NON le « Secret » de trello.com/power-ups/admin.${detail ? ' ' + detail : ''}`
       );
     }
     if (res.status === 404) {
@@ -54,11 +56,11 @@ async function trelloGet(path, { apiKey, token, params = {} }) {
  * Récupère toutes les données nécessaires au Gantt en 3 requêtes :
  * le tableau (avec listes + membres), les cartes et les checklists (étapes).
  * @param {string} boardInput - URL ou ID du tableau
- * @param {string} token - token API Trello
- * @param {string} [apiKey] - clé d'API (optionnelle pour l'usage personnel)
+ * @param {string} token - token utilisateur Trello (obtenu via /1/authorize)
+ * @param {string} [apiKey] - clé d'API « key » du Power-Up (optionnelle pour l'usage personnel)
  */
 export async function fetchBoardData(boardInput, token, apiKey = '') {
-  if (!token || !token.trim()) throw new Error('Le champ « Token » est vide.');
+  if (!token || !token.trim()) throw new Error('Le champ « Token utilisateur » est vide.');
   const boardId = extractBoardId(boardInput);
   const auth = { apiKey: apiKey.trim(), token: token.trim() };
 

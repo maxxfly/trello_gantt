@@ -253,6 +253,36 @@ code {
   color: #14417b;
 }
 
+.app__token {
+  align-self: end;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #14417b;
+  background: #fff;
+  border: 1px solid #b9d0ef;
+  border-radius: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.app__token:hover:not(:disabled) {
+  background: #eaf1fb;
+}
+
+.app__hint .app__steps {
+  margin: 6px 0 8px;
+  padding-left: 22px;
+}
+
+.app__hint .app__steps li {
+  margin-bottom: 4px;
+}
+
+.app__hint p {
+  margin: 6px 0 0;
+}
+
 .app__error {
   margin-top: 12px;
   padding: 12px 14px;
