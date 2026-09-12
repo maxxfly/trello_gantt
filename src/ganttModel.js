@@ -9,6 +9,31 @@ function toDate(value) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Temps écoulé entre deux instants (Date ou epoch ms), SAMEDI et DIMANCHE
+ * exclus. Utilisé pour les durées rapportées (stats, résumé, tri par durée) ;
+ * la géométrie des barres reste calendaire (les week-ends y sont grisés).
+ */
+export function workMs(from, to) {
+  let a = +from;
+  let b = +to;
+  if (!(b > a)) return 0;
+  let total = 0;
+  const d = new Date(a);
+  d.setHours(0, 0, 0, 0);
+  while (+d < b) {
+    const dayStart = +d;
+    const dayEnd = dayStart + DAY_MS;
+    const dow = d.getDay(); // 0 = dimanche, 6 = samedi
+    if (dow !== 0 && dow !== 6) {
+      total += Math.min(b, dayEnd) - Math.max(a, dayStart);
+    }
+    a = dayEnd;
+    d.setDate(d.getDate() + 1);
+  }
+  return total;
+}
+
 // Répartition stable de couleurs pour les listes (étapes globales)
 export const LIST_PALETTE = [
   '#4f8ef7',

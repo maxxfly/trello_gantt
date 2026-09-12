@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import { Avatar, AvatarStack } from "./Avatars.jsx";
+import { workMs } from "./ganttModel.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SIDE_W = 320; // largeur de la colonne « Tâche » (doit matcher .gantt__row-side)
@@ -65,18 +66,19 @@ const fmtFull = new Intl.DateTimeFormat("fr-FR", {
 
 /**
  * Statistiques d'une tâche pour l'infobulle de survol :
- *  - jours total (durée de la barre, prolongée jusqu'à aujourd'hui si en cours)
+ *  - durée totale (temps de travail, week-ends exclus ; barre prolongée
+ *    jusqu'à aujourd'hui si la tâche est en cours)
  *  - répartition en % du temps par étape (colonne), agrégée si revisitée
  *  - nombre de repoussages de l'échéance (taille de dueHistory)
  *  - nombre de retours en arrière (segments marqués back)
  */
 function computeRowStats(row) {
-  const totalHours = Math.max(0, (row.end - row.start) / 3600000);
+  const totalHours = workMs(row.start, row.end) / 3600000;
   // Agrégation par colonne (un même nom peut revenir : on somme les durées).
   const byCol = new Map();
   let sumMs = 0;
   for (const s of row.steps || []) {
-    const ms = Math.max(0, s.to - s.from);
+    const ms = workMs(s.from, s.to);
     sumMs += ms;
     const e = byCol.get(s.listId) || { listName: s.listName, color: s.color, ms: 0 };
     e.ms += ms;
@@ -507,7 +509,7 @@ export default function GanttChart({ model }) {
                             width: `${pct}%`,
                             flex: "none",
                           }}
-                          title={`${s.listName}\n${fmtFull.format(s.from)} → ${fmtFull.format(s.to)}\n${Math.max(1, Math.round(dayDiff(s.from, s.to)))} jour(s)${s.state === "current" ? "\nColonne actuelle" : ""}${s.state === "revisit" ? "\nRetour dans cette colonne" : ""}${s.back ? "\n⬅ Retour en arrière dans le flux" : ""}`}
+                          title={`${s.listName}\n${fmtFull.format(s.from)} → ${fmtFull.format(s.to)}\n${fmtHours(workMs(s.from, s.to) / 3600000)} de travail (week-ends exclus)${s.state === "current" ? "\nColonne actuelle" : ""}${s.state === "revisit" ? "\nRetour dans cette colonne" : ""}${s.back ? "\n⬅ Retour en arrière dans le flux" : ""}`}
                         >
                           {showBack && s.back && (
                             <span
@@ -597,8 +599,8 @@ function RowTooltip({ hover }) {
         </div>
       )}
 
-      <div className="rowtip__row">
-        <span>Durée</span>
+      <div className="rowtip__row" title="Samedis et dimanches exclus">
+        <span>Durée (ouvrée)</span>
         <strong>{fmtHours(stats.totalHours)}</strong>
       </div>
 

@@ -116,6 +116,13 @@ without a due date go last), **title (A→Z)**, or **creation date**. Each has a
 default direction (desc for durations/counts/delay, asc otherwise) and a **↑/↓ button**
 reverses it. The choice is remembered in `localStorage`; ties break by name.
 
+### Working days (weekends excluded)
+
+Reported **durations**, the **% split per step**, the **summary** and the **duration /
+delay sorts** all count **working time only** — Saturdays and Sundays are excluded
+(`workMs()` in `ganttModel.js`). Bar **geometry stays calendar-based**: a bar still spans
+the real dates, and the gray weekend bands show exactly the time that is *not* counted.
+
 ### Light / dark theme
 
 A **🌙 / ☀️** button in the header toggles day/night. The choice is remembered in

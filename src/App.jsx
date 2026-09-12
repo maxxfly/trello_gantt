@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 import { fetchBoardData } from "./trelloApi.js";
-import { buildGanttModel } from "./ganttModel.js";
+import { buildGanttModel, workMs } from "./ganttModel.js";
 import GanttChart from "./GanttChart.jsx";
 import Legend from "./Legend.jsx";
 import TagSelect from "./TagSelect.jsx";
@@ -20,7 +20,7 @@ const LS_SORT = "gantt-trello-sort";
 
 const SORT_OPTIONS = {
   default: "🗓️ Début (par défaut)",
-  duration: "⏱️ Durée de la tâche",
+  duration: "⏱️ Durée (jours ouvrés)",
   pushbacks: "🔁 Reports d'échéance",
   delay: "🐌 Retard vs date de fin",
   alpha: "🔤 Titre (A → Z)",
@@ -52,9 +52,13 @@ function sortRows(rows, key, dir) {
     return sorted;
   }
   const val = {
-    duration: (r) => r.end - r.start,
+    duration: (r) => workMs(r.start, r.end),
     pushbacks: (r) => (r.dueHistory || []).length,
-    delay: (r) => (r.due ? r.end - r.due : Number.NEGATIVE_INFINITY),
+    delay: (r) =>
+      r.due
+        ? (r.end >= r.due ? 1 : -1) *
+          workMs(Math.min(+r.end, +r.due), Math.max(+r.end, +r.due))
+        : Number.NEGATIVE_INFINITY,
     created: (r) => (r.created ? r.created.getTime() : Number.NEGATIVE_INFINITY),
   }[key];
   // « retard » : les tâches sans échéance vont toujours à la fin, quel que soit
@@ -63,7 +67,13 @@ function sortRows(rows, key, dir) {
     const withDue = sorted.filter((r) => r.due);
     const noDue = sorted.filter((r) => !r.due);
     withDue.sort((a, b) => {
-      const d = mul * (a.end - a.due - (b.end - b.due));
+      const da =
+        (a.end >= a.due ? 1 : -1) *
+        workMs(Math.min(+a.end, +a.due), Math.max(+a.end, +a.due));
+      const db =
+        (b.end >= b.due ? 1 : -1) *
+        workMs(Math.min(+b.end, +b.due), Math.max(+b.end, +b.due));
+      const d = mul * (da - db);
       return d !== 0 ? d : a.name.localeCompare(b.name, "fr");
     });
     return [...withDue, ...noDue];
@@ -135,9 +145,10 @@ function filterRowsByPeriod(rows, from, to) {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Résumé par étape (colonne) : temps passé dans chaque colonne, calculé sur les
- * lignes filtrées et écrêté à la période choisie (si active). Sous un jour, on
- * compte en heures pour ne pas perdre les étapes très courtes.
+ * Résumé par étape (colonne) : temps de travail (week-ends exclus) passé dans
+ * chaque colonne, calculé sur les lignes filtrées et écrêté à la période choisie
+ * (si active). Sous un jour, on compte en heures pour ne pas perdre les étapes
+ * très courtes.
  * Retour : [{ listId, listName, color, hours, tasks }] trié par ordre des colonnes.
  */
 function summarizeByList(rows, lists, period) {
@@ -151,7 +162,7 @@ function summarizeByList(rows, lists, period) {
       let to = s.to.getTime();
       if (f) from = Math.max(from, f.getTime());
       if (tEnd) to = Math.min(to, tEnd.getTime());
-      const hours = (to - from) / 3600000;
+      const hours = workMs(from, to) / 3600000;
       if (hours <= 0) continue; // on ne garde que les étapes de durée positive
       const e = acc.get(s.listId) || {
         listId: s.listId,
@@ -1494,8 +1505,12 @@ export default function App() {
 
           {summary.length > 0 && (
             <div className="app__summary" aria-label="Résumé par étape">
-              <span className="app__summary-title">
-                Répartition par étape{periodActive ? " (sur la période)" : ""}
+              <span
+                className="app__summary-title"
+                title="Samedis et dimanches exclus des durées"
+              >
+                Répartition par étape (jours ouvrés)
+                {periodActive ? " · sur la période" : ""}
               </span>
               {(() => {
                 const total = summary.reduce((a, b) => a + b.hours, 0) || 1;
