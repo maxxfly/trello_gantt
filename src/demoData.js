@@ -20,58 +20,43 @@ const lists = [
   { id: 'l4', name: 'Terminé', pos: 4 },
 ];
 
-const checklistsById = {
-  c1: {
-    id: 'c1',
-    checkItems: [
-      { name: 'Maquettes', state: 'complete', pos: 1 },
-      { name: 'Intégration', state: 'incomplete', pos: 2 },
-      { name: 'Tests', state: 'incomplete', pos: 3 },
-    ],
-  },
-  c2: {
-    id: 'c2',
-    checkItems: [
-      { name: 'Schéma BDD', state: 'complete', pos: 1 },
-      { name: 'API REST', state: 'unknown', pos: 2 },
-      { name: 'Cache', state: 'incomplete', pos: 3 },
-    ],
-  },
-  c3: {
-    id: 'c3',
-    checkItems: [
-      { name: 'Rédaction', state: 'complete', pos: 1 },
-      { name: 'Relecture', state: 'unknown', pos: 2 },
-    ],
-  },
-  c4: {
-    id: 'c4',
-    checkItems: [
-      { name: 'Audit sécurité', state: 'complete', pos: 1 },
-      { name: 'Correctifs', state: 'complete', pos: 2 },
-      { name: 'Déploiement', state: 'complete', pos: 3 },
-    ],
-  },
-  c5: {
-    id: 'c5',
-    checkItems: [
-      { name: 'Wireframes', state: 'complete', pos: 1 },
-      { name: 'Design system', state: 'complete', pos: 2 },
-      { name: 'Prototypage', state: 'unknown', pos: 3 },
-      { name: 'Validation', state: 'incomplete', pos: 4 },
-    ],
-  },
-};
-
 const cards = [
-  { id: 'card1', name: 'Refonte de la page d’accueil', idList: 'l2', start: iso(daysAgo(12)), due: iso(daysAhead(6)), idMembers: ['m1', 'm2'], idChecklists: ['c5'], closed: false },
-  { id: 'card2', name: 'API de facturation', idList: 'l2', start: iso(daysAgo(8)), due: iso(daysAhead(10)), idMembers: ['m3'], idChecklists: ['c2'], closed: false },
-  { id: 'card3', name: 'Migration base de données', idList: 'l1', start: iso(daysAgo(2)), due: iso(daysAhead(18)), idMembers: ['m3', 'm4'], idChecklists: ['c1'], closed: false },
-  { id: 'card4', name: 'Documentation utilisateur', idList: 'l3', start: iso(daysAgo(20)), due: iso(daysAgo(1)), idMembers: ['m4'], idChecklists: ['c3'], closed: false },
-  { id: 'card5', name: 'Audit de sécurité', idList: 'l4', start: iso(daysAgo(30)), due: iso(daysAgo(12)), idMembers: ['m1', 'm2', 'm3', 'm4'], idChecklists: ['c4'], closed: false },
-  { id: 'card6', name: 'Onboarding nouvelle équipe', idList: 'l1', start: iso(daysAgo(1)), due: iso(daysAhead(4)), idMembers: ['m2'], idChecklists: [], closed: false },
-  { id: 'card7', name: 'Plan marketing Q4', idList: 'l3', start: iso(daysAgo(5)), due: iso(daysAhead(3)), idMembers: ['m1'], idChecklists: [], closed: false },
+  { id: '66f1a2b3c4d5e6f7a8b9c0d1', shortLink: 'demoAAAA', name: 'Refonte de la page d’accueil', idList: 'l2', start: iso(daysAgo(12)), due: iso(daysAhead(6)), idMembers: ['m1', 'm2'], closed: false },
+  { id: '66f8b3c4d5e6f7a8b9c0d1e2', shortLink: 'demoBBBB', name: 'API de facturation', idList: 'l2', start: iso(daysAgo(8)), due: iso(daysAhead(10)), idMembers: ['m3'], closed: false },
+  { id: '6702c4d5e6f7a8b9c0d1e2f3', shortLink: 'demoCCCC', name: 'Migration base de données', idList: 'l1', start: iso(daysAgo(2)), due: iso(daysAhead(18)), idMembers: ['m3', 'm4'], closed: false },
+  { id: '66d1d5e6f7a8b9c0d1e2f3a4', shortLink: 'demoDDDD', name: 'Documentation utilisateur', idList: 'l3', start: iso(daysAgo(20)), due: iso(daysAgo(1)), idMembers: ['m4'], closed: false },
+  { id: '66b3e6f7a8b9c0d1e2f3a4b5', shortLink: 'demoEEEE', name: 'Audit de sécurité', idList: 'l4', start: iso(daysAgo(30)), due: iso(daysAgo(12)), idMembers: ['m1', 'm2', 'm3', 'm4'], closed: false },
+  { id: '670ae7f8a8b9c0d1e2f3a4b5', shortLink: 'demoFFFF', name: 'Onboarding nouvelle équipe', idList: 'l1', start: iso(daysAgo(1)), due: iso(daysAhead(4)), idMembers: ['m2'], closed: false },
+  { id: '6705f8a9b9c0d1e2f3a4b5c6', shortLink: 'demoGGGG', name: 'Plan marketing Q4', idList: 'l3', start: iso(daysAgo(5)), due: iso(daysAhead(3)), idMembers: ['m1'], closed: false },
 ];
+
+// Historique des changements de colonne (simule les actions updateCard:idList).
+// { date, listBefore, listAfter } triés du plus ancien au plus récent.
+const movesByCardId = {
+  '66f1a2b3c4d5e6f7a8b9c0d1': [
+    { date: daysAgo(12), listBefore: 'l1', listAfter: 'l2' },
+    { date: daysAgo(4), listBefore: 'l2', listAfter: 'l3' },
+    { date: daysAgo(1), listBefore: 'l3', listAfter: 'l2' }, // retour en arrière
+  ],
+  '66f8b3c4d5e6f7a8b9c0d1e2': [
+    { date: daysAgo(6), listBefore: 'l1', listAfter: 'l2' },
+  ],
+  '6702c4d5e6f7a8b9c0d1e2f3': [],
+  '66d1d5e6f7a8b9c0d1e2f3a4': [
+    { date: daysAgo(18), listBefore: 'l1', listAfter: 'l2' },
+    { date: daysAgo(9), listBefore: 'l2', listAfter: 'l3' },
+  ],
+  '66b3e6f7a8b9c0d1e2f3a4b5': [
+    { date: daysAgo(28), listBefore: 'l1', listAfter: 'l2' },
+    { date: daysAgo(20), listBefore: 'l2', listAfter: 'l3' },
+    { date: daysAgo(13), listBefore: 'l3', listAfter: 'l4' },
+  ],
+  '670ae7f8a8b9c0d1e2f3a4b5': [],
+  '6705f8a9b9c0d1e2f3a4b5c6': [
+    { date: daysAgo(3), listBefore: 'l1', listAfter: 'l2' },
+    { date: daysAgo(1), listBefore: 'l2', listAfter: 'l3' },
+  ],
+};
 
 export function getDemoData() {
   return {
@@ -79,6 +64,6 @@ export function getDemoData() {
     lists,
     cards,
     members,
-    checklistsById,
+    movesByCardId,
   };
 }

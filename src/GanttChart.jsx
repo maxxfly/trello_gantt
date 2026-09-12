@@ -1,6 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
 import { AvatarStack } from "./Avatars.jsx";
-import { STEP_STATE_META } from "./ganttModel.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -120,10 +119,19 @@ export default function GanttChart({ model }) {
           {rows.map((row) => {
             const left = x(row.start);
             const width = Math.max(6, x(row.end) - left);
+            const barMs = Math.max(1, row.end - row.start);
             const segments =
               row.steps.length > 0
                 ? row.steps
-                : [{ name: null, state: "none" }];
+                : [
+                    {
+                      listName: row.listName,
+                      color: row.color,
+                      from: row.start,
+                      to: row.end,
+                      state: 'done',
+                    },
+                  ];
             return (
               <div
                 key={row.id}
@@ -134,7 +142,19 @@ export default function GanttChart({ model }) {
                     className="gantt__row-dot"
                     style={{ background: row.color }}
                   />
-                  <span className="gantt__row-name">{row.name}</span>
+                  {row.url ? (
+                    <a
+                      className="gantt__row-name gantt__row-link"
+                      href={row.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={`Ouvrir la carte dans Trello : ${row.name}`}
+                    >
+                      {row.name}
+                    </a>
+                  ) : (
+                    <span className="gantt__row-name">{row.name}</span>
+                  )}
                   <AvatarStack members={row.members} size={22} max={3} />
                 </div>
                 <div className="gantt__row-track" style={{ width: totalWidth }}>
@@ -149,44 +169,51 @@ export default function GanttChart({ model }) {
                     <div className="gantt__today" style={{ left: todayX }} />
                   )}
                   <div
-                    className={`gantt__bar${row.steps.length === 0 ? " gantt__bar--plain" : ""}`}
+                    className={`gantt__bar${row.steps.length === 0 ? " gantt__bar--plain" : ""}${!row.done ? " gantt__bar--ongoing" : ""}`}
                     style={{
                       left,
                       width,
                       opacity: row.closed ? 0.45 : 1,
                     }}
+                    title={!row.done ? "Tâche en cours : la barre se prolonge jusqu'à aujourd'hui" : undefined}
                   >
-                    {segments.map((s, i) =>
-                      s.state === "none" ? (
+                    {segments.map((s, i) => {
+                      const segWidth =
+                        ((s.to - s.from) / barMs) * 100;
+                      const pct = Math.max(0.5, Math.min(100, segWidth));
+                      return (
                         <div
                           key={i}
-                          className="gantt__segment"
-                          style={{ background: row.color, flex: 1 }}
-                          title={`${row.name}\n${fmtFull.format(row.start)} → ${fmtFull.format(row.end)}\nListe : ${row.listName}`}
-                        >
-                          <span className="gantt__bar-label">{row.name}</span>
-                        </div>
-                      ) : (
-                        <div
-                          key={i}
-                          className="gantt__segment"
+                          className={`gantt__segment${s.state === "current" ? " gantt__segment--current" : ""}${s.state === "revisit" ? " gantt__segment--revisit" : ""}`}
                           style={{
-                            background: STEP_STATE_META[s.state].color,
-                            flex: 1,
+                            background: s.color,
+                            width: `${pct}%`,
+                            flex: "none",
                           }}
-                          title={`Étape ${i + 1}/${row.steps.length} : ${s.name}\nStatut : ${STEP_STATE_META[s.state].label}${s.due ? `\nÉchéance : ${fmtFull.format(s.due)}` : ""}`}
+                          title={`${s.listName}\n${fmtFull.format(s.from)} → ${fmtFull.format(s.to)}\n${Math.max(1, Math.round(dayDiff(s.from, s.to)))} jour(s)${s.state === "current" ? "\nColonne actuelle" : ""}${s.state === "revisit" ? "\nRetour dans cette colonne" : ""}`}
                         />
-                      ),
-                    )}
-                    {row.steps.length > 0 && (
-                      <span
-                        className="gantt__bar-label gantt__bar-label--after"
-                        title={`${row.name} — ${row.listName}`}
-                      >
-                        {row.name}
-                      </span>
-                    )}
+                      );
+                    })}
                   </div>
+                  {/* Libellé de la tâche, hors de la barre (cliquable -> carte Trello) */}
+                  <span
+                    className="gantt__bar-label--after"
+                    style={{ left: left + width + 7 }}
+                  >
+                    {row.url ? (
+                      <a
+                        className="gantt__bar-link"
+                        href={row.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Ouvrir la carte dans Trello"
+                      >
+                        {row.name} ↗
+                      </a>
+                    ) : (
+                      row.name
+                    )}
+                  </span>
                   {row.due && (
                     <div
                       className="gantt__due"

@@ -23,76 +23,111 @@ export const LIST_PALETTE = [
   '#5aa9e6',
 ];
 
+// Un segment = une période passée dans une colonne. Couleur = celle de la
+// liste ; le dernier segment (colonne actuelle d'une tâche non terminée) est
+// hachuré « en cours ».
 export const STEP_STATE_META = {
-  complete: { label: 'Étape terminée', color: '#1f9d55' },
-  incomplete: { label: 'Étape à faire', color: '#e8b931' },
-  unknown: { label: 'Étape en cours', color: '#f2733d' },
+  done: { label: 'Colonne traversée', color: null },
+  current: { label: 'Colonne actuelle (en cours)', color: null },
+  revisit: { label: 'Retour dans une colonne déjà quittée', color: null },
 };
-
-function normalizeStepState(state) {
-  if (state === 'complete') return 'complete';
-  if (state === 'incomplete') return 'incomplete';
-  return 'unknown';
-}
 
 /**
  * Construit le modèle du Gantt.
- * @param {object} raw - { board, lists, cards, members } de fetchBoardData
- * @returns {{ title, rows, membersById, listColors, min, max }}
+ *
+ * Les « étapes » sont les **changements de colonne** de la carte (historique
+ * Trello / actions `updateCard:idList`), et non les checklists. Chaque segment
+ * de la barre représente une période passée dans une liste donnée.
+ *
+ * @param {object} raw - { board, lists, cards, members, movesByCardId } de fetchBoardData
+ * @returns {{ title, rows, membersById, listColors, lists, min, max }}
  */
-export function buildGanttModel({ board, lists, cards, members, checklistsById = {} }) {
-  // Couleur par liste = « étape » globale de la carte (colonne du board)
+export function buildGanttModel({ board, lists, cards, members, movesByCardId = {} }) {
+  // Couleur par liste = étape (colonne du board)
   const listColors = {};
   lists.forEach((l, i) => {
     listColors[l.id] = LIST_PALETTE[i % LIST_PALETTE.length];
   });
+  const listById = {};
+  for (const l of lists) listById[l.id] = l;
+  const listName = (id) => listById[id]?.name || '(hors liste)';
 
   const membersById = {};
   for (const m of members) membersById[m.id] = m;
 
-  // Ordonner les cartes par date de début (date de création si absente),
-  // les cartes fermées en dernier.
+  // Une tâche est « terminée » si elle est archivée OU si elle se trouve dans
+  // la dernière colonne du tableau (par position).
+  const listsByPos = [...lists].sort((a, b) => (a.pos || 0) - (b.pos || 0));
+  const lastListId = listsByPos.length ? listsByPos[listsByPos.length - 1].id : null;
+
+  const now = new Date();
   const openCards = cards.filter((c) => !c.closed);
   const closedCards = cards.filter((c) => c.closed);
-
-  const startOf = (c) => {
-    // L'API expose parfois "start" ; sinon on utilise la date de création.
-    // Les cartes Trello n'ont pas de "created" dans /cards sans le champ :
-    // on le récupère via l'ID (les 8 premiers caractères hex = timestamp).
-    const s = toDate(c.start);
-    if (s) return s;
-    const created = createdAtFromCardId(c.id);
-    return created ?? new Date(0);
-  };
-
   const all = [...openCards, ...closedCards];
+
   const rows = all.map((c) => {
-    const start = startOf(c);
+    const created = createdAtFromCardId(c.id) ?? new Date(0);
+    const start = toDate(c.start) || created;
     const due = toDate(c.due);
-    let end = due && due > start ? due : new Date(start.getTime() + MIN_TASK_MS);
-    const steps = (c.idChecklists || [])
-      .map((id) => checklistsById[id])
-      .filter(Boolean)
-      .sort((a, b) => (a.pos || 0) - (b.pos || 0))
-      .flatMap((cl) =>
-        (cl.checkItems || [])
-          .sort((a, b) => (a.pos || 0) - (b.pos || 0))
-          .map((item) => ({
-            name: item.name,
-            state: normalizeStepState(item.state),
-            due: toDate(item.due),
-          }))
-      );
+    const done = !!c.closed || (lastListId != null && c.idList === lastListId);
+
+    // --- Segments = périodes passées dans chaque colonne -------------------
+    // bornées par les déplacements de la carte (ignorés si antérieurs au début).
+    const moves = (movesByCardId[c.id] || []).filter((m) => m.date >= start);
+    const boundaries = [{ at: start, listId: firstListId(moves, c.idList) }];
+    for (const m of moves) {
+      const last = boundaries[boundaries.length - 1];
+      if (m.listAfter === last.listId) continue; // pas un vrai changement
+      boundaries.push({ at: m.date, listId: m.listAfter });
+    }
+
+    // Fin de la tâche :
+    //  - terminée : dernier événement connu (échéance incluse) ;
+    //  - non terminée : se prolonge jusqu'à aujourd'hui (et au-delà si en retard).
+    const lastBoundary = boundaries[boundaries.length - 1].at;
+    let taskEnd;
+    if (done) {
+      taskEnd = due && due > lastBoundary ? due : lastBoundary;
+    } else {
+      taskEnd = now > start ? now : start;
+      if (due && due > taskEnd) taskEnd = due; // en retard -> visible jusqu'à l'échéance
+    }
+    if (taskEnd <= lastBoundary) taskEnd = new Date(lastBoundary.getTime() + MIN_TASK_MS);
+
+    const steps = boundaries.map((b, i) => {
+      const next = i + 1 < boundaries.length ? boundaries[i + 1].at : taskEnd;
+      const isLast = i === boundaries.length - 1;
+      return {
+        listId: b.listId,
+        listName: listName(b.listId),
+        color: listColors[b.listId] || '#94a3b8',
+        from: b.at,
+        to: next,
+        // Dernier segment = colonne actuelle ; traversés = terminé ;
+        // un retour vers une colonne déjà vue est signalé en jaune.
+        state: isLast ? (done ? 'done' : 'current') : 'done',
+      };
+    });
+    // Repère « retour en arrière » : une colonne revisitée (hors dernier segment)
+    const seen = new Set();
+    for (const s of steps) {
+      if (s.state !== 'current' && seen.has(s.listId)) s.state = 'revisit';
+      seen.add(s.listId);
+    }
+
     return {
       id: c.id,
       name: c.name,
+      // Lien direct vers la carte : https://trello.com/c/<shortLink>
+      url: c.shortLink ? `https://trello.com/c/${c.shortLink}` : null,
       listId: c.idList,
-      listName: lists.find((l) => l.id === c.idList)?.name || '(hors liste)',
+      listName: listName(c.idList),
       color: listColors[c.idList] || '#94a3b8',
       start,
-      end: end > start ? end : new Date(start.getTime() + MIN_TASK_MS),
+      end: taskEnd > start ? taskEnd : new Date(start.getTime() + MIN_TASK_MS),
       due,
       closed: !!c.closed,
+      done,
       members: (c.idMembers || []).map((id) => membersById[id]).filter(Boolean),
       steps,
     };
@@ -131,4 +166,9 @@ export function createdAtFromCardId(id) {
   const ts = parseInt(id.slice(0, 8), 16);
   if (Number.isNaN(ts)) return null;
   return new Date(ts * 1000);
+}
+
+/** Colonne d'origine de la carte : premier listBefore connu, sinon colonne actuelle. */
+function firstListId(moves, currentListId) {
+  return moves.length ? moves[0].listBefore || currentListId : currentListId;
 }

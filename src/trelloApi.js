@@ -1,7 +1,5 @@
 // Client pour l'API REST de Trello (https://developer.atlassian.com/cloud/trello/rest/)
-// Requêtes GET en JSON, authentification via les paramètres d'URL « key » (clé d'API)
-// et « token » (token utilisateur). Le « secret » du Power-Up ne sert pas ici
-// (il est réservé à OAuth 1.0 et aux webhooks).
+// Requêtes GET en JSON, token passé en paramètre d'URL.
 
 const API_BASE = 'https://api.trello.com/1';
 
@@ -31,24 +29,15 @@ async function trelloGet(path, { apiKey, token, params = {} }) {
   search.set('token', token);
   const res = await fetch(`${API_BASE}${path}?${search.toString()}`);
   if (!res.ok) {
-    // Trello renvoie parfois du JSON {"message": ...}, parfois du texte brut ("invalid key")
     let detail = '';
-    const body = await res.text().catch(() => '');
     try {
-      detail = JSON.parse(body)?.message || body;
+      detail = (await res.json())?.message || '';
     } catch {
-      detail = body;
-    }
-    detail = (detail || '').trim().slice(0, 200);
-
-    if (detail === 'invalid key' || /invalid key/i.test(detail)) {
-      throw new Error(
-        `Clé d'API inconnue de Trello (« invalid key »). Vérifiez le champ « Clé d'API » : il doit contenir la clé hexadécimale de 32 caractères affichée dans trello.com/power-ups/admin → onglet « Clé d'API » — et NON le « Secret ». Si la clé a été régénérée depuis, copiez la nouvelle.`
-      );
+      /* réponse non-JSON */
     }
     if (res.status === 401 || res.status === 403) {
       throw new Error(
-        `Accès refusé par Trello (${res.status}) : le token est invalide, révoqué, ou lié à un compte qui ne voit pas ce tableau. Cliquez sur « Autoriser l'application » avec le bon compte Trello pour régénérer un token.${detail ? ' ' + detail : ''}`
+        `Token Trello invalide ou permissions insuffisantes (${res.status}).${detail ? ' ' + detail : ''}`
       );
     }
     if (res.status === 404) {
@@ -63,17 +52,18 @@ async function trelloGet(path, { apiKey, token, params = {} }) {
 
 /**
  * Récupère toutes les données nécessaires au Gantt en 3 requêtes :
- * le tableau (avec listes + membres), les cartes et les checklists (étapes).
+ * le tableau (avec listes + membres), les cartes et l'historique des
+ * déplacements de cartes entre colonnes (= les vraies « étapes »).
  * @param {string} boardInput - URL ou ID du tableau
- * @param {string} token - token utilisateur Trello (obtenu via /1/authorize)
- * @param {string} [apiKey] - clé d'API « key » du Power-Up (optionnelle pour l'usage personnel)
+ * @param {string} token - token API Trello
+ * @param {string} [apiKey] - clé d'API (optionnelle pour l'usage personnel)
  */
 export async function fetchBoardData(boardInput, token, apiKey = '') {
-  if (!token || !token.trim()) throw new Error('Aucun token Trello : cliquez sur « Autoriser l\u2019application » (ou utilisez la saisie manuelle).');
+  if (!token || !token.trim()) throw new Error('Le champ « Token » est vide.');
   const boardId = extractBoardId(boardInput);
   const auth = { apiKey: apiKey.trim(), token: token.trim() };
 
-  const [board, cards, checklists] = await Promise.all([
+  const [board, cards, moveActions] = await Promise.all([
     trelloGet(`/boards/${boardId}`, {
       ...auth,
       params: {
@@ -87,20 +77,55 @@ export async function fetchBoardData(boardInput, token, apiKey = '') {
     trelloGet(`/boards/${boardId}/cards`, {
       ...auth,
       params: {
-        fields: 'id,name,start,due,idList,idMembers,closed,pos,idChecklists',
+        fields: 'id,name,start,due,idList,idMembers,closed,pos,shortLink',
       },
     }),
-    // Seule cette endpoint renvoie l'état (state) de chaque item (= étape).
-    trelloGet(`/boards/${boardId}/checklists`, {
-      ...auth,
-      params: { checkItems: 'all' },
-    }),
+    fetchListMoves(boardId, auth),
   ]);
 
   const lists = (board.lists || []).filter((l) => !l.closed);
   const members = board.members || [];
-  const checklistsById = {};
-  for (const cl of checklists || []) checklistsById[cl.id] = cl;
 
-  return { board, lists, cards, members, checklistsById };
+  //movesByCardId : pour chaque carte, la liste des changements de colonne
+  //({ date, listBefore, listAfter }) triés du plus ancien au plus récent.
+  const movesByCardId = {};
+  for (const a of moveActions) {
+    const cardId = a.data?.card?.id;
+    const before = a.data?.listBefore?.id;
+    const after = a.data?.listAfter?.id;
+    const date = a.date;
+    if (!cardId || !after || !date) continue;
+    (movesByCardId[cardId] = movesByCardId[cardId] || []).push({
+      date: new Date(date),
+      listBefore: before || null,
+      listAfter: after,
+    });
+  }
+  for (const id of Object.keys(movesByCardId)) {
+    movesByCardId[id].sort((x, y) => x.date - y.date);
+  }
+
+  return { board, lists, cards, members, movesByCardId };
+}
+
+/**
+ * Historique des déplacements de cartes entre listes (filter=updateCard:idList),
+ * paginé (100 actions max par requête, jusqu'à 20 pages = 2000 déplacements).
+ */
+async function fetchListMoves(boardId, auth) {
+  const all = [];
+  for (let page = 0; page < 20; page++) {
+    const batch = await trelloGet(`/boards/${boardId}/actions`, {
+      ...auth,
+      params: {
+        filter: 'updateCard:idList',
+        limit: 100,
+        page,
+        fields: 'date,type,data',
+      },
+    });
+    all.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return all;
 }
