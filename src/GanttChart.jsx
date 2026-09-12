@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { AvatarStack } from "./Avatars.jsx";
+import { Avatar, AvatarStack } from "./Avatars.jsx";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SIDE_W = 320; // largeur de la colonne « Tâche » (doit matcher .gantt__row-side)
@@ -15,6 +15,13 @@ const ZOOM_MAX = 80;
 
 function dayDiff(a, b) {
   return (b.getTime() - a.getTime()) / DAY_MS;
+}
+
+/** Duree lisible : heures si < 1 jour, sinon jours (1 decimale si besoin). */
+function fmtHours(hours) {
+  if (hours < 24) return `${Math.max(1, Math.round(hours))} h`;
+  const d = Math.round((hours / 24) * 10) / 10;
+  return `${Number.isInteger(d) ? d : d.toFixed(1).replace(".", ",")} j`;
 }
 
 /** Jours du mois -> graduations hebdomadaires (lundis) pour l'en-tête. */
@@ -64,7 +71,7 @@ const fmtFull = new Intl.DateTimeFormat("fr-FR", {
  *  - nombre de retours en arrière (segments marqués back)
  */
 function computeRowStats(row) {
-  const totalDays = Math.max(0, Math.round(dayDiff(row.start, row.end)));
+  const totalHours = Math.max(0, (row.end - row.start) / 3600000);
   // Agrégation par colonne (un même nom peut revenir : on somme les durées).
   const byCol = new Map();
   let sumMs = 0;
@@ -76,20 +83,26 @@ function computeRowStats(row) {
     byCol.set(s.listId, e);
   }
   const partsAll = [...byCol.values()]
-    .map((e) => ({
-      listName: e.listName,
-      color: e.color,
-      pct: sumMs > 0 ? Math.round((e.ms / sumMs) * 100) : 0,
-      days: Math.max(0, Math.round(e.ms / DAY_MS)),
-    }))
+    .map((e) => {
+      const hours = e.ms / 3600000;
+      return {
+        listName: e.listName,
+        color: e.color,
+        pct: sumMs > 0 ? Math.round((e.ms / sumMs) * 100) : 0,
+        dur:
+          hours < 24
+            ? `${Math.max(1, Math.round(hours))} h`
+            : `${(Math.round((hours / 24) * 10) / 10).toString().replace(".", ",")} j`,
+        keep: hours > 0,
+      };
+    })
     .sort((a, b) => b.ms - a.ms);
-  // On masque les étapes à durée nulle (artefacts de frontière) pour garder la
-  // liste lisible ; s'il ne reste rien, on garde tout (cas dégénéré).
-  const parts = partsAll.filter((p) => p.days > 0);
+  // On masque uniquement les étapes de durée nulle (artefacts de frontière).
+  const parts = partsAll.filter((p) => p.keep);
   const shown = parts.length ? parts : partsAll;
   const duePushbacks = (row.dueHistory || []).length;
   const backCount = (row.steps || []).filter((s) => s.back).length;
-  return { totalDays, parts: shown, duePushbacks, backCount };
+  return { totalHours, parts: shown, duePushbacks, backCount };
 }
 
 export default function GanttChart({ model }) {
@@ -508,25 +521,6 @@ export default function GanttChart({ model }) {
                       );
                     })}
                   </div>
-                  {/* Libellé de la tâche, hors de la barre (cliquable -> carte Trello) */}
-                  <span
-                    className="gantt__bar-label--after"
-                    style={{ left: left + width + 7 }}
-                  >
-                    {row.url ? (
-                      <a
-                        className="gantt__bar-link"
-                        href={row.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Ouvrir la carte dans Trello"
-                      >
-                        {row.name} ↗
-                      </a>
-                    ) : (
-                      row.name
-                    )}
-                  </span>
                   {row.due && (
                     <div
                       className="gantt__due"
@@ -591,9 +585,21 @@ function RowTooltip({ hover }) {
         · {row.listName}
       </div>
 
+      {row.creator && (
+        <div className="rowtip__creator">
+          <Avatar member={row.creator} size={18} />
+          <span>
+            Créée par{" "}
+            <strong>
+              {row.creator.fullName || row.creator.username || "?"}
+            </strong>
+          </span>
+        </div>
+      )}
+
       <div className="rowtip__row">
         <span>Durée</span>
-        <strong>{stats.totalDays} j</strong>
+        <strong>{fmtHours(stats.totalHours)}</strong>
       </div>
 
       {stats.parts.length > 0 && (
@@ -614,7 +620,7 @@ function RowTooltip({ hover }) {
                 <span className="rowtip__dot" style={{ background: p.color }} />
                 <span className="rowtip__part-name">{p.listName}</span>
                 <span className="rowtip__part-pct">{p.pct}%</span>
-                <span className="rowtip__part-days">{p.days} j</span>
+                <span className="rowtip__part-days">{p.dur}</span>
               </li>
             ))}
           </ul>

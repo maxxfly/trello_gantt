@@ -108,6 +108,14 @@ last event (no "ongoing" stamp edge).
 
 All four filters (card state, search, period, tags) combine.
 
+### Sorting
+
+A **↕️ sort** dropdown in the footer orders the displayed tasks by: **duration**,
+**number of due-date pushes**, **delay vs due date** (end − due; positive = late, tasks
+without a due date go last), **title (A→Z)**, or **creation date**. Each has a sensible
+default direction (desc for durations/counts/delay, asc otherwise) and a **↑/↓ button**
+reverses it. The choice is remembered in `localStorage`; ties break by name.
+
 ### Light / dark theme
 
 A **🌙 / ☀️** button in the header toggles day/night. The choice is remembered in
@@ -127,9 +135,10 @@ use the current theme's background.
 
 ### Summary
 
-Under the chart, a summary shows the **cumulative days per column (step)** for the
+Under the chart, a summary shows the **time share per column (step)** for the
 currently displayed tasks — clipped to the selected period when one is set — as a
-proportional stacked bar plus a list (`column: N days · M tasks`).
+proportional stacked bar plus a list (`column: N % · duration · M tasks`). Durations
+show **hours** when under a day, days otherwise, so short steps are never lost.
 
 ### Export
 
@@ -170,7 +179,7 @@ Trello API — there is no intermediary server.
 | --- | --- | --- |
 | **Task** | Card (linked to `https://trello.com/c/<shortLink>`) | Row + bar on the timeline |
 | **Start date** | `start` if set, otherwise **creation date** (derived from the card ID) | Bar origin |
-| **End date** | **Done** (archived or in the last column): date of the **last step** — or the **archiving date** if it never reached the last column (never the due date). **Not done**: bar extends **to today** (or to the due date if overdue) | Bar end |
+| **End date** | **Done** (archived or in the last column): date of the **last step** — or the **archiving date** if it never reached the last column. **Not done**: bar extends **to today** (never past today; a future due date is only a diamond). (never the due date) | Bar end |
 | **Steps** | **Column changes** (board actions `updateCard:idList`) | Time-proportional segments inside the bar, colored by column |
 | **Current column** | The column the card is in now (open task) | Hatched last segment |
 | **Revisit** | Card moved back to a column it already left | Cross-hatched segment (yellow) |

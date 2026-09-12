@@ -16,6 +16,66 @@ const LS_PROFILES = "gantt-trello-profiles";
 const LS_LAST = "gantt-trello-last-profile";
 const LS_FILTER = "gantt-trello-card-filter";
 const LS_PERIOD = "gantt-trello-period";
+const LS_SORT = "gantt-trello-sort";
+
+const SORT_OPTIONS = {
+  default: "🗓️ Début (par défaut)",
+  duration: "⏱️ Durée de la tâche",
+  pushbacks: "🔁 Reports d'échéance",
+  delay: "🐌 Retard vs date de fin",
+  alpha: "🔤 Titre (A → Z)",
+  created: "🐣 Date de création",
+};
+
+/** Sens le plus utile par défaut quand on choisit un critère de tri. */
+function defaultDirFor(key) {
+  return key === "duration" || key === "pushbacks" || key === "delay"
+    ? "desc"
+    : "asc";
+}
+
+/**
+ * Tri des lignes affichées.
+ *  - delay = (fin de barre) - échéance : >0 = en retard (terminée après son
+ *    échéance, ou en cours dépassant son échéance) ; sans échéance -> à la fin.
+ *  - created / duration / pushbacks : valeurs numériques.
+ *  - alpha : ordre alphabétique insensible aux accents.
+ */
+function sortRows(rows, key, dir) {
+  if (key === "default") return rows; // le modèle est déjà trié par date de début
+  const mul = dir === "asc" ? 1 : -1;
+  const sorted = [...rows];
+  if (key === "alpha") {
+    sorted.sort((a, b) =>
+      mul * a.name.localeCompare(b.name, "fr", { sensitivity: "base" }),
+    );
+    return sorted;
+  }
+  const val = {
+    duration: (r) => r.end - r.start,
+    pushbacks: (r) => (r.dueHistory || []).length,
+    delay: (r) => (r.due ? r.end - r.due : Number.NEGATIVE_INFINITY),
+    created: (r) => (r.created ? r.created.getTime() : Number.NEGATIVE_INFINITY),
+  }[key];
+  // « retard » : les tâches sans échéance vont toujours à la fin, quel que soit
+  // le sens (elles ne sont « en retard » de rien).
+  if (key === "delay") {
+    const withDue = sorted.filter((r) => r.due);
+    const noDue = sorted.filter((r) => !r.due);
+    withDue.sort((a, b) => {
+      const d = mul * (a.end - a.due - (b.end - b.due));
+      return d !== 0 ? d : a.name.localeCompare(b.name, "fr");
+    });
+    return [...withDue, ...noDue];
+  }
+  sorted.sort((a, b) => {
+    const va = val(a);
+    const vb = val(b);
+    if (va === vb) return a.name.localeCompare(b.name, "fr");
+    return mul * (va - vb);
+  });
+  return sorted;
+}
 const LS_THEME = "gantt-trello-theme";
 
 /** Thème initial : choix mémorisé, sinon préférence système. */
@@ -75,9 +135,10 @@ function filterRowsByPeriod(rows, from, to) {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Résumé par étape (colonne) : jours passés dans chaque colonne, calculés sur
- * les lignes filtrées et écrêtés à la période choisie (si active).
- * Retour : [{ listId, listName, color, days, tasks }] trié par ordre des colonnes.
+ * Résumé par étape (colonne) : temps passé dans chaque colonne, calculé sur les
+ * lignes filtrées et écrêté à la période choisie (si active). Sous un jour, on
+ * compte en heures pour ne pas perdre les étapes très courtes.
+ * Retour : [{ listId, listName, color, hours, tasks }] trié par ordre des colonnes.
  */
 function summarizeByList(rows, lists, period) {
   const f = parseDateInput(period.from);
@@ -90,16 +151,16 @@ function summarizeByList(rows, lists, period) {
       let to = s.to.getTime();
       if (f) from = Math.max(from, f.getTime());
       if (tEnd) to = Math.min(to, tEnd.getTime());
-      const days = (to - from) / DAY_MS;
-      if (days <= 0) continue;
+      const hours = (to - from) / 3600000;
+      if (hours <= 0) continue; // on ne garde que les étapes de durée positive
       const e = acc.get(s.listId) || {
         listId: s.listId,
         listName: s.listName,
         color: s.color,
-        days: 0,
+        hours: 0,
         tasks: new Set(),
       };
-      e.days += days;
+      e.hours += hours;
       e.tasks.add(r.id);
       acc.set(s.listId, e);
     }
@@ -107,10 +168,18 @@ function summarizeByList(rows, lists, period) {
   // Ordre des colonnes du board, puis colonnes inconnues à la fin.
   const order = new Map(lists.map((l, i) => [l.id, i]));
   return [...acc.values()]
-    .map((e) => ({ ...e, days: Math.round(e.days), tasks: e.tasks.size }))
+    .map((e) => ({ ...e, hours: Math.round(e.hours), tasks: e.tasks.size }))
     .sort(
       (a, b) => (order.get(a.listId) ?? 1e9) - (order.get(b.listId) ?? 1e9),
     );
+}
+
+/** Duree lisible : heures si < 1 jour, sinon jours (1 decimale si besoin). */
+function fmtDuration(hours) {
+  if (hours < 24) return `${Math.max(1, Math.round(hours))} h`;
+  const days = hours / 24;
+  const r = Math.round(days * 10) / 10;
+  return `${Number.isInteger(r) ? r : r.toFixed(1).replace(".", ",")} j`;
 }
 
 function uid() {
@@ -332,6 +401,30 @@ export default function App() {
   // casse et aux accents).
   const [search, setSearch] = useState("");
 
+  // Tri des lignes : { key, dir } persiste.
+  const [sort, setSort] = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(LS_SORT) || "null");
+      if (s && SORT_OPTIONS[s.key]) return { key: s.key, dir: s.dir === "asc" ? "asc" : "desc" };
+    } catch {
+      /* ignore */
+    }
+    return { key: "default", dir: "desc" };
+  });
+
+  const changeSortKey = (key) => {
+    const next = { key, dir: defaultDirFor(key) };
+    setSort(next);
+    localStorage.setItem(LS_SORT, JSON.stringify(next));
+  };
+  const toggleSortDir = () => {
+    setSort((s) => {
+      const next = { ...s, dir: s.dir === "asc" ? "desc" : "asc" };
+      localStorage.setItem(LS_SORT, JSON.stringify(next));
+      return next;
+    });
+  };
+
   const filteredModel = useMemo(() => {
     if (!model) return null;
     let rows = filterRows(model.rows, cardFilter);
@@ -347,8 +440,9 @@ export default function App() {
       // Recherche sur le titre uniquement.
       rows = rows.filter((r) => normSearch(r.name).includes(q));
     }
+    rows = sortRows(rows, sort.key, sort.dir);
     return { ...model, rows };
-  }, [model, cardFilter, period, labelFilter, search]);
+  }, [model, cardFilter, period, labelFilter, search, sort]);
 
   const periodActive = !!(period.from || period.to);
 
@@ -435,17 +529,25 @@ export default function App() {
       return;
     }
     if (profileModal.mode === "new") {
+      // Nouveau profil = fiche VIERGE : on n'hérite pas des identifiants
+      // encore saisis (ils appartiennent au profil précédent). On vide le
+      // formulaire + le Gantt pour que l'état de connexion reflète la réalité.
       const profile = {
         id: uid(),
         name: trimmed,
-        board: board.trim(),
-        token: token.trim(),
-        apiKey: apiKey.trim(),
+        board: "",
+        token: "",
+        apiKey: "",
         updatedAt: new Date().toISOString(),
       };
       persistProfiles([...profiles, profile]);
       setSelectedId(profile.id);
       localStorage.setItem(LS_LAST, profile.id);
+      setBoard("");
+      setToken("");
+      setApiKey("");
+      setModel(null);
+      setTokenError(null);
     } else {
       const existing = profiles.find((p) => p.id === selectedId);
       if (!existing) return;
@@ -939,7 +1041,7 @@ export default function App() {
 
                 <p className="settings__note">
                   {profileModal.mode === "new"
-                    ? "Le profil enregistrera le tableau, le token et la clé d'API saisis dans ⚙️ Connexion Trello, dans ce navigateur (localStorage)."
+                    ? "Le profil démarre vierge : renseignez ensuite tableau, token et clé d'API dans ⚙️ Connexion Trello (tout est stocké dans ce navigateur, localStorage)."
                     : "Modifiez le nom ; les identifiants actuellement saisis seront réenregistrés sur ce profil."}
                 </p>
 
@@ -1229,6 +1331,38 @@ export default function App() {
                 aria-label="Recherche dans les tâches"
               />
             </div>
+            <div className="app__sort" role="group" aria-label="Tri des tâches">
+              <span className="app__field-icon" aria-hidden>
+                ↕️
+              </span>
+              <select
+                value={sort.key}
+                onChange={(e) => changeSortKey(e.target.value)}
+                aria-label="Critère de tri"
+                title="Trier les tâches affichées"
+              >
+                {Object.entries(SORT_OPTIONS).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              {sort.key !== "default" && (
+                <button
+                  type="button"
+                  className="app__mini"
+                  onClick={toggleSortDir}
+                  title={
+                    sort.dir === "asc"
+                      ? "Ordre croissant — cliquer pour inverser"
+                      : "Ordre décroissant — cliquer pour inverser"
+                  }
+                  aria-label="Inverser le sens du tri"
+                >
+                  {sort.dir === "asc" ? "↑" : "↓"}
+                </button>
+              )}
+            </div>
             <div
               className="app__filter"
               role="group"
@@ -1364,7 +1498,7 @@ export default function App() {
                 Répartition par étape{periodActive ? " (sur la période)" : ""}
               </span>
               {(() => {
-                const total = summary.reduce((a, b) => a + b.days, 0) || 1;
+                const total = summary.reduce((a, b) => a + b.hours, 0) || 1;
                 return (
                   <>
                     <div className="app__summary-bar">
@@ -1373,12 +1507,12 @@ export default function App() {
                           key={s.listId}
                           className="app__summary-seg"
                           style={{
-                            width: `${(s.days / total) * 100}%`,
+                            width: `${(s.hours / total) * 100}%`,
                             background: s.color,
                           }}
                           title={`${s.listName} : ${Math.round(
-                            (s.days / total) * 100,
-                          )} % · ${s.days} j · ${s.tasks} tâche(s)`}
+                            (s.hours / total) * 100,
+                          )} % · ${fmtDuration(s.hours)} · ${s.tasks} tâche(s)`}
                         />
                       ))}
                     </div>
@@ -1390,10 +1524,10 @@ export default function App() {
                             style={{ background: s.color }}
                           />
                           {s.listName} ·{" "}
-                          <strong>{Math.round((s.days / total) * 100)} %</strong>
+                          <strong>{Math.round((s.hours / total) * 100)} %</strong>
                           <em>
                             {" "}
-                            · {s.days} j · {s.tasks} tâche(s)
+                            · {fmtDuration(s.hours)} · {s.tasks} tâche(s)
                           </em>
                         </li>
                       ))}

@@ -30,16 +30,16 @@ const labels = [
 ];
 
 const cards = [
-  { id: '66f1a2b3c4d5e6f7a8b9c0d1', shortLink: 'demoAAAA', name: 'Refonte de la page d’accueil', idList: 'l2', start: iso(daysAgo(12)), due: iso(daysAhead(6)), idMembers: ['m1', 'm2'], idLabels: ['lb3', 'lb1'], closed: false },
-  { id: '66f8b3c4d5e6f7a8b9c0d1e2', shortLink: 'demoBBBB', name: 'API de facturation', idList: 'l2', start: iso(daysAgo(8)), due: iso(daysAhead(10)), idMembers: ['m3'], idLabels: ['lb2'], closed: false },
-  { id: '6702c4d5e6f7a8b9c0d1e2f3', shortLink: 'demoCCCC', name: 'Migration base de données', idList: 'l1', start: iso(daysAgo(2)), due: iso(daysAhead(18)), idMembers: ['m3', 'm4'], idLabels: ['lb2', 'lb4'], closed: false },
-  { id: '66d1d5e6f7a8b9c0d1e2f3a4', shortLink: 'demoDDDD', name: 'Documentation utilisateur', idList: 'l3', start: iso(daysAgo(20)), due: iso(daysAgo(1)), idMembers: ['m4'], idLabels: ['lb5'], closed: false },
-  { id: '66b3e6f7a8b9c0d1e2f3a4b5', shortLink: 'demoEEEE', name: 'Audit de sécurité', idList: 'l4', start: iso(daysAgo(30)), due: iso(daysAgo(12)), idMembers: ['m1', 'm2', 'm3', 'm4'], idLabels: ['lb4', 'lb1'], closed: false },
-  { id: '670ae7f8a8b9c0d1e2f3a4b5', shortLink: 'demoFFFF', name: 'Onboarding nouvelle équipe', idList: 'l1', start: iso(daysAgo(1)), due: iso(daysAhead(4)), idMembers: ['m2'], idLabels: [], closed: false },
-  { id: '6705f8a9b9c0d1e2f3a4b5c6', shortLink: 'demoGGGG', name: 'Plan marketing Q4', idList: 'l3', start: iso(daysAgo(5)), due: iso(daysAhead(3)), idMembers: ['m1'], idLabels: ['lb5'], closed: false },
-  { id: '6692a1b2c3d4e5f6a7b8c9d0', shortLink: 'demoHHHH', name: 'Correctif paiement dupliqué', idList: 'l4', start: iso(daysAgo(45)), due: iso(daysAgo(38)), idMembers: ['m2'], idLabels: ['lb1', 'lb2'], closed: true },
-  { id: '6680b2c3d4e5f6a7b8c9d0e1', shortLink: 'demoIIII', name: 'Migration vers l’API v2', idList: 'l4', start: iso(daysAgo(60)), due: iso(daysAgo(41)), idMembers: ['m3', 'm4'], idLabels: ['lb2', 'lb4'], closed: true },
-  { id: '6671c3d4e5f6a7b8c9d0e1f2', shortLink: 'demoJJJJ', name: 'Refonte des e-mails transactionnels', idList: 'l3', start: iso(daysAgo(52)), due: iso(daysAgo(30)), idMembers: ['m1'], idLabels: ['lb3'], closed: true },
+  { id: '66f1a2b3c4d5e6f7a8b9c0d1', shortLink: 'demoAAAA', name: 'Refonte de la page d’accueil', idList: 'l2', start: iso(daysAgo(12)), due: iso(daysAhead(6)), idMembers: ['m1', 'm2'], idMemberCreator: 'm1', idLabels: ['lb3', 'lb1'], closed: false },
+  { id: '66f8b3c4d5e6f7a8b9c0d1e2', shortLink: 'demoBBBB', name: 'API de facturation', idList: 'l2', start: iso(daysAgo(8)), due: iso(daysAhead(10)), idMembers: ['m3'], idMemberCreator: 'm3', idLabels: ['lb2'], closed: false },
+  { id: '6702c4d5e6f7a8b9c0d1e2f3', shortLink: 'demoCCCC', name: 'Migration base de données', idList: 'l1', start: iso(daysAgo(2)), due: iso(daysAhead(18)), idMembers: ['m3', 'm4'], idMemberCreator: 'm4', idLabels: ['lb2', 'lb4'], closed: false },
+  { id: '66d1d5e6f7a8b9c0d1e2f3a4', shortLink: 'demoDDDD', name: 'Documentation utilisateur', idList: 'l3', start: iso(daysAgo(20)), due: iso(daysAgo(1)), idMembers: ['m4'], idMemberCreator: 'm2', idLabels: ['lb5'], closed: false },
+  { id: '66b3e6f7a8b9c0d1e2f3a4b5', shortLink: 'demoEEEE', name: 'Audit de sécurité', idList: 'l4', start: iso(daysAgo(30)), due: iso(daysAgo(12)), idMembers: ['m1', 'm2', 'm3', 'm4'], idMemberCreator: 'm1', idLabels: ['lb4', 'lb1'], closed: false },
+  { id: '670ae7f8a8b9c0d1e2f3a4b5', shortLink: 'demoFFFF', name: 'Onboarding nouvelle équipe', idList: 'l1', start: iso(daysAgo(1)), due: iso(daysAhead(4)), idMembers: ['m2'], idMemberCreator: 'm4', idLabels: [], closed: false },
+  { id: '6705f8a9b9c0d1e2f3a4b5c6', shortLink: 'demoGGGG', name: 'Plan marketing Q4', idList: 'l3', start: iso(daysAgo(5)), due: iso(daysAhead(3)), idMembers: ['m1'], idMemberCreator: 'm1', idLabels: ['lb5'], closed: false },
+  { id: '6692a1b2c3d4e5f6a7b8c9d0', shortLink: 'demoHHHH', name: 'Correctif paiement dupliqué', idList: 'l4', start: iso(daysAgo(45)), due: iso(daysAgo(38)), idMembers: ['m2'], idMemberCreator: 'm3', idLabels: ['lb1', 'lb2'], closed: true },
+  { id: '6680b2c3d4e5f6a7b8c9d0e1', shortLink: 'demoIIII', name: 'Migration vers l’API v2', idList: 'l4', start: iso(daysAgo(60)), due: iso(daysAgo(41)), idMembers: ['m3', 'm4'], idMemberCreator: 'm2', idLabels: ['lb2', 'lb4'], closed: true },
+  { id: '6671c3d4e5f6a7b8c9d0e1f2', shortLink: 'demoJJJJ', name: 'Refonte des e-mails transactionnels', idList: 'l3', start: iso(daysAgo(52)), due: iso(daysAgo(30)), idMembers: ['m1'], idMemberCreator: 'm4', idLabels: ['lb3'], closed: true },
 ];
 
 // Historique des changements de colonne (simule les actions updateCard:idList).

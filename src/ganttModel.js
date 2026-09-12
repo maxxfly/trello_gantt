@@ -121,7 +121,9 @@ export function buildGanttModel({ board, lists, closedLists = [], labels = [], c
     //  - terminée : date de la DERNIÈRE ÉTAPE (entrée dans la colonne actuelle) ;
     //    si la carte a été archivée sans jamais atteindre la dernière colonne,
     //    date d'archivage. La due date n'étend JAMAIS la barre.
-    //  - non terminée : se prolonge jusqu'à aujourd'hui (et au-delà si en retard).
+    //  - non terminée : se prolonge jusqu'à aujourd'hui UNIQUEMENT (une tâche en
+    //    cours n'a pas encore consommé de temps futur, même si son échéance est
+    //    postérieure ; l'échéance future reste marquée par son losange).
     const lastBoundary = boundaries[boundaries.length - 1].at;
     let taskEnd;
     if (done) {
@@ -130,7 +132,6 @@ export function buildGanttModel({ board, lists, closedLists = [], labels = [], c
       taskEnd = archivedAt && archivedAt > lastBoundary ? archivedAt : lastBoundary;
     } else {
       taskEnd = now > start ? now : start;
-      if (due && due > taskEnd) taskEnd = due; // en retard -> visible jusqu'à l'échéance
     }
     if (taskEnd <= lastBoundary) taskEnd = new Date(lastBoundary.getTime() + MIN_TASK_MS);
 
@@ -170,6 +171,7 @@ export function buildGanttModel({ board, lists, closedLists = [], labels = [], c
       listName: listName(c.idList),
       color: listColors[c.idList] || '#94a3b8',
       start,
+      created,
       end: taskEnd > start ? taskEnd : new Date(start.getTime() + MIN_TASK_MS),
       due,
       closed: !!c.closed,
@@ -179,6 +181,7 @@ export function buildGanttModel({ board, lists, closedLists = [], labels = [], c
         (h) => !due || h.due.getTime() !== due.getTime()
       ),
       members: (c.idMembers || []).map((id) => membersById[id]).filter(Boolean),
+      creator: membersById[c.idMemberCreator] || null,
       labels: (c.idLabels || [])
         .map((id) => labelsById[id])
         .filter(Boolean)

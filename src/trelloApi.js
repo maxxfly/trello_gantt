@@ -83,7 +83,7 @@ export async function fetchBoardData(boardInput, token, apiKey = '') {
       params: {
         // « all » = cartes actives + archivées (le tri se fera côté affichage).
         filter: 'all',
-        fields: 'id,name,start,due,idList,idMembers,closed,pos,shortLink,idLabels',
+        fields: 'id,name,start,due,idList,idMembers,closed,pos,shortLink,idLabels,idMemberCreator',
       },
     }),
     fetchListMoves(boardId, auth),
@@ -94,12 +94,15 @@ export async function fetchBoardData(boardInput, token, apiKey = '') {
   const closedLists = allLists.filter((l) => l.closed);
   const members = board.members || [];
 
-  // Certains membres assignés à des cartes ne sont plus dans la liste des
-  // membres du board (quitté/partagé) : on récupère leur profil (photo,
-  // initiales...) individuellement pour afficher les bons avatars.
+  // Certains membres assignés à des cartes (ou leurs créateurs) ne sont plus
+  // dans la liste des membres du board (quitté/partagé) : on récupère leur
+  // profil (photo, initiales...) individuellement pour avatars et créateur.
   const knownIds = new Set(members.map((m) => m.id));
   const missingIds = [
-    ...new Set((cards || []).flatMap((c) => c.idMembers || [])),
+    ...new Set([
+      ...(cards || []).flatMap((c) => c.idMembers || []),
+      ...(cards || []).map((c) => c.idMemberCreator).filter(Boolean),
+    ]),
   ].filter((id) => !knownIds.has(id));
   const extraMembers = await Promise.all(
     missingIds.map((id) =>
