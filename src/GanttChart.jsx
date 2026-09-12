@@ -80,7 +80,11 @@ function computeRowStats(row) {
   for (const s of row.steps || []) {
     const ms = workMs(s.from, s.to);
     sumMs += ms;
-    const e = byCol.get(s.listId) || { listName: s.listName, color: s.color, ms: 0 };
+    const e = byCol.get(s.listId) || {
+      listName: s.listName,
+      color: s.color,
+      ms: 0,
+    };
     e.ms += ms;
     byCol.set(s.listId, e);
   }
@@ -579,12 +583,8 @@ function RowTooltip({ hover }) {
         <span className="rowtip__name">{row.name}</span>
       </div>
       <div className="rowtip__status">
-        {row.closed
-          ? "Archivée"
-          : row.done
-            ? "Terminée"
-            : "En cours"}{" "}
-        · {row.listName}
+        {row.closed ? "Archivée" : row.done ? "Terminée" : "En cours"} ·{" "}
+        {row.listName}
       </div>
 
       {row.creator && (

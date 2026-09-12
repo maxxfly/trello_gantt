@@ -46,8 +46,9 @@ function sortRows(rows, key, dir) {
   const mul = dir === "asc" ? 1 : -1;
   const sorted = [...rows];
   if (key === "alpha") {
-    sorted.sort((a, b) =>
-      mul * a.name.localeCompare(b.name, "fr", { sensitivity: "base" }),
+    sorted.sort(
+      (a, b) =>
+        mul * a.name.localeCompare(b.name, "fr", { sensitivity: "base" }),
     );
     return sorted;
   }
@@ -59,7 +60,8 @@ function sortRows(rows, key, dir) {
         ? (r.end >= r.due ? 1 : -1) *
           workMs(Math.min(+r.end, +r.due), Math.max(+r.end, +r.due))
         : Number.NEGATIVE_INFINITY,
-    created: (r) => (r.created ? r.created.getTime() : Number.NEGATIVE_INFINITY),
+    created: (r) =>
+      r.created ? r.created.getTime() : Number.NEGATIVE_INFINITY,
   }[key];
   // « retard » : les tâches sans échéance vont toujours à la fin, quel que soit
   // le sens (elles ne sont « en retard » de rien).
@@ -416,7 +418,8 @@ export default function App() {
   const [sort, setSort] = useState(() => {
     try {
       const s = JSON.parse(localStorage.getItem(LS_SORT) || "null");
-      if (s && SORT_OPTIONS[s.key]) return { key: s.key, dir: s.dir === "asc" ? "asc" : "desc" };
+      if (s && SORT_OPTIONS[s.key])
+        return { key: s.key, dir: s.dir === "asc" ? "asc" : "desc" };
     } catch {
       /* ignore */
     }
@@ -577,7 +580,16 @@ export default function App() {
     setProfileModal(null);
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 1600);
-  }, [profileModal, draftName, profiles, selectedId, board, token, apiKey, persistProfiles]);
+  }, [
+    profileModal,
+    draftName,
+    profiles,
+    selectedId,
+    board,
+    token,
+    apiKey,
+    persistProfiles,
+  ]);
 
   /** Charge un profil enregistré dans le formulaire. */
   const selectProfile = useCallback(
@@ -869,7 +881,13 @@ export default function App() {
         {/* Ligne 1 : titre a gauche, aide + theme a droite */}
         <div className="app__row app__row--top">
           <div className="app__brand">
-            <img className="app__logo" src="./favicon.svg" alt="" width="44" height="44" />
+            <img
+              className="app__logo"
+              src="./favicon.svg"
+              alt=""
+              width="44"
+              height="44"
+            />
             <div>
               <h1>Gantt Trello</h1>
               <p>Visualisez les tâches et leurs étapes sur une timeline.</p>
@@ -890,8 +908,12 @@ export default function App() {
               className="app__help"
               type="button"
               onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-              title={theme === "dark" ? "Passer en mode jour" : "Passer en mode nuit"}
-              aria-label={theme === "dark" ? "Passer en mode jour" : "Passer en mode nuit"}
+              title={
+                theme === "dark" ? "Passer en mode jour" : "Passer en mode nuit"
+              }
+              aria-label={
+                theme === "dark" ? "Passer en mode jour" : "Passer en mode nuit"
+              }
             >
               {theme === "dark" ? "☀️" : "🌙"}
             </button>
@@ -1002,225 +1024,230 @@ export default function App() {
           </button>
         </div>
 
-          {profileModal && (
+        {profileModal && (
+          <div
+            className="settings__backdrop"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setProfileModal(null);
+            }}
+          >
             <div
-              className="settings__backdrop"
-              onMouseDown={(e) => {
-                if (e.target === e.currentTarget) setProfileModal(null);
-              }}
+              className="settings"
+              role="dialog"
+              aria-modal="true"
+              aria-label={
+                profileModal.mode === "new"
+                  ? "Nouveau profil"
+                  : "Renommer le profil"
+              }
             >
-              <div
-                className="settings"
-                role="dialog"
-                aria-modal="true"
-                aria-label={
-                  profileModal.mode === "new" ? "Nouveau profil" : "Renommer le profil"
-                }
-              >
-                <div className="settings__head">
-                  <h2>
-                    {profileModal.mode === "new" ? "＋ Nouveau profil" : "✎ Renommer le profil"}
-                  </h2>
-                  <button
-                    type="button"
-                    className="app__mini"
-                    onClick={() => setProfileModal(null)}
-                    title="Fermer"
-                    aria-label="Fermer"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <label className="app__field">
-                  <span>Nom du profil</span>
-                  <input
-                    type="text"
-                    placeholder="ex : Projet Alpha"
-                    value={draftName}
-                    autoFocus
-                    onChange={(e) => setDraftName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        confirmProfile();
-                      }
-                    }}
-                    spellCheck={false}
-                  />
-                </label>
-
-                <p className="settings__note">
+              <div className="settings__head">
+                <h2>
                   {profileModal.mode === "new"
-                    ? "Le profil démarre vierge : renseignez ensuite tableau, token et clé d'API dans ⚙️ Connexion Trello (tout est stocké dans ce navigateur, localStorage)."
-                    : "Modifiez le nom ; les identifiants actuellement saisis seront réenregistrés sur ce profil."}
-                </p>
+                    ? "＋ Nouveau profil"
+                    : "✎ Renommer le profil"}
+                </h2>
+                <button
+                  type="button"
+                  className="app__mini"
+                  onClick={() => setProfileModal(null)}
+                  title="Fermer"
+                  aria-label="Fermer"
+                >
+                  ✕
+                </button>
+              </div>
 
-                <div className="settings__actions">
-                  <button
-                    type="button"
-                    className="app__ghost"
-                    onClick={() => setProfileModal(null)}
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="button"
-                    className="app__submit"
-                    onClick={confirmProfile}
-                  >
-                    {profileModal.mode === "new" ? "Créer" : "Enregistrer"}
-                  </button>
-                </div>
+              <label className="app__field">
+                <span>Nom du profil</span>
+                <input
+                  type="text"
+                  placeholder="ex : Projet Alpha"
+                  value={draftName}
+                  autoFocus
+                  onChange={(e) => setDraftName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      confirmProfile();
+                    }
+                  }}
+                  spellCheck={false}
+                />
+              </label>
+
+              <p className="settings__note">
+                {profileModal.mode === "new"
+                  ? "Le profil démarre vierge : renseignez ensuite tableau, token et clé d'API dans ⚙️ Connexion Trello (tout est stocké dans ce navigateur, localStorage)."
+                  : "Modifiez le nom ; les identifiants actuellement saisis seront réenregistrés sur ce profil."}
+              </p>
+
+              <div className="settings__actions">
+                <button
+                  type="button"
+                  className="app__ghost"
+                  onClick={() => setProfileModal(null)}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="app__submit"
+                  onClick={confirmProfile}
+                >
+                  {profileModal.mode === "new" ? "Créer" : "Enregistrer"}
+                </button>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {settingsOpen && (
+        {settingsOpen && (
+          <div
+            className="settings__backdrop"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setSettingsOpen(false);
+            }}
+          >
             <div
-              className="settings__backdrop"
-              onMouseDown={(e) => {
-                if (e.target === e.currentTarget) setSettingsOpen(false);
-              }}
+              className="settings"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Connexion Trello"
             >
-              <div
-                className="settings"
-                role="dialog"
-                aria-modal="true"
-                aria-label="Connexion Trello"
-              >
-                <div className="settings__head">
-                  <h2>⚙️ Connexion Trello</h2>
-                  <button
-                    type="button"
-                    className="app__mini"
-                    onClick={() => setSettingsOpen(false)}
-                    title="Fermer"
-                    aria-label="Fermer les réglages"
-                  >
-                    ✕
-                  </button>
-                </div>
+              <div className="settings__head">
+                <h2>⚙️ Connexion Trello</h2>
+                <button
+                  type="button"
+                  className="app__mini"
+                  onClick={() => setSettingsOpen(false)}
+                  title="Fermer"
+                  aria-label="Fermer les réglages"
+                >
+                  ✕
+                </button>
+              </div>
 
-                <label className="app__field app__field--board">
-                  <span>Tableau (URL ou ID)</span>
+              <label className="app__field app__field--board">
+                <span>Tableau (URL ou ID)</span>
+                <input
+                  type="text"
+                  placeholder="https://trello.com/b/xxxx/mon-tableau"
+                  value={board}
+                  onChange={(e) => setBoard(e.target.value)}
+                  spellCheck={false}
+                />
+              </label>
+
+              <div className="app__field">
+                <span>Token</span>
+                <div className="app__token-row">
                   <input
-                    type="text"
-                    placeholder="https://trello.com/b/xxxx/mon-tableau"
-                    value={board}
-                    onChange={(e) => setBoard(e.target.value)}
-                    spellCheck={false}
-                  />
-                </label>
-
-                <div className="app__field">
-                  <span>Token</span>
-                  <div className="app__token-row">
-                    <input
-                      type={tokenVisible ? "text" : "password"}
-                      placeholder="token API Trello"
-                      aria-label="Token API Trello"
-                      value={token}
-                      onChange={(e) => setToken(e.target.value)}
-                      spellCheck={false}
-                      autoComplete="off"
-                    />
-                    <button
-                      type="button"
-                      className="app__mini"
-                      onClick={() => setTokenVisible((v) => !v)}
-                      disabled={!token}
-                      title={tokenVisible ? "Masquer le token" : "Afficher le token"}
-                      aria-label={tokenVisible ? "Masquer le token" : "Afficher le token"}
-                    >
-                      {tokenVisible ? "🙈" : "👁️"}
-                    </button>
-                    <button
-                      type="button"
-                      className="app__mini"
-                      onClick={copyToken}
-                      disabled={!token}
-                      title="Copier le token dans le presse-papiers"
-                    >
-                      {tokenCopied ? "✓" : "⧉"}
-                    </button>
-                    <button
-                      type="button"
-                      className={`app__mini app__mini--auth${tokenAuthed ? " app__mini--ok" : ""}`}
-                      onClick={requestToken}
-                      disabled={loading}
-                      title={
-                        tokenAuthed
-                          ? "Token reçu ✓"
-                          : "Obtenir le token automatiquement : ouvre trello.com/1/authorize (lecture seule). Requiert l'adresse de cette app dans « Origines autorisées » du Power-Up."
-                      }
-                    >
-                      {tokenAuthed ? "✓" : "🔑"}
-                    </button>
-                  </div>
-                  {tokenError && (
-                    <p className="settings__error" role="alert">
-                      {tokenError}
-                    </p>
-                  )}
-                </div>
-
-                <label className="app__field">
-                  <span>
-                    Clé d'API <em>(optionnelle)</em>
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="clé d'API du Power-Up"
-                    value={apiKey}
-                    onChange={(e) => {
-                      setApiKey(e.target.value);
-                      if (tokenError) setTokenError(null);
-                    }}
+                    type={tokenVisible ? "text" : "password"}
+                    placeholder="token API Trello"
+                    aria-label="Token API Trello"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
                     spellCheck={false}
                     autoComplete="off"
                   />
-                </label>
-
-                <p className="settings__note">
-                  La clé d'API se copie sur{" "}
-                  <a
-                    href="https://trello.com/power-ups/admin"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    trello.com/power-ups/admin
-                  </a>{" "}
-                  (onglet « Clé d'API » : copiez « Clé d'API », <em>pas</em> « Secret »).
-                  Pour le token : saisissez la clé ci-dessus puis cliquez{" "}
-                  <strong>🔑</strong> — autorisation en un clic (votre adresse doit
-                  figurer dans « Origines autorisées »). Repli manuel via{" "}
-                  <code>
-                    trello.com/1/authorize?…&amp;key=VOTRE_CLE
-                  </code>
-                  .
-                </p>
-
-                <div className="settings__actions">
                   <button
                     type="button"
-                    className="app__ghost"
-                    onClick={() => setSettingsOpen(false)}
+                    className="app__mini"
+                    onClick={() => setTokenVisible((v) => !v)}
+                    disabled={!token}
+                    title={
+                      tokenVisible ? "Masquer le token" : "Afficher le token"
+                    }
+                    aria-label={
+                      tokenVisible ? "Masquer le token" : "Afficher le token"
+                    }
                   >
-                    Annuler
+                    {tokenVisible ? "🙈" : "👁️"}
                   </button>
                   <button
-                    className="app__submit"
-                    type="submit"
-                    disabled={loading}
-                    onClick={() => setSettingsOpen(false)}
+                    type="button"
+                    className="app__mini"
+                    onClick={copyToken}
+                    disabled={!token}
+                    title="Copier le token dans le presse-papiers"
                   >
-                    {loading ? "Chargement…" : "Afficher le Gantt"}
+                    {tokenCopied ? "✓" : "⧉"}
+                  </button>
+                  <button
+                    type="button"
+                    className={`app__mini app__mini--auth${tokenAuthed ? " app__mini--ok" : ""}`}
+                    onClick={requestToken}
+                    disabled={loading}
+                    title={
+                      tokenAuthed
+                        ? "Token reçu ✓"
+                        : "Obtenir le token automatiquement : ouvre trello.com/1/authorize (lecture seule). Requiert l'adresse de cette app dans « Origines autorisées » du Power-Up."
+                    }
+                  >
+                    {tokenAuthed ? "✓" : "🔑"}
                   </button>
                 </div>
+                {tokenError && (
+                  <p className="settings__error" role="alert">
+                    {tokenError}
+                  </p>
+                )}
+              </div>
+
+              <label className="app__field">
+                <span>
+                  Clé d'API <em>(optionnelle)</em>
+                </span>
+                <input
+                  type="text"
+                  placeholder="clé d'API du Power-Up"
+                  value={apiKey}
+                  onChange={(e) => {
+                    setApiKey(e.target.value);
+                    if (tokenError) setTokenError(null);
+                  }}
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+              </label>
+
+              <p className="settings__note">
+                La clé d'API se copie sur{" "}
+                <a
+                  href="https://trello.com/power-ups/admin"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  trello.com/power-ups/admin
+                </a>{" "}
+                (onglet « Clé d'API » : copiez « Clé d'API », <em>pas</em> «
+                Secret »). Pour le token : saisissez la clé ci-dessus puis
+                cliquez <strong>🔑</strong> — autorisation en un clic (votre
+                adresse doit figurer dans « Origines autorisées »). Repli manuel
+                via <code>trello.com/1/authorize?…&amp;key=VOTRE_CLE</code>.
+              </p>
+
+              <div className="settings__actions">
+                <button
+                  type="button"
+                  className="app__ghost"
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  Annuler
+                </button>
+                <button
+                  className="app__submit"
+                  type="submit"
+                  disabled={loading}
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  {loading ? "Chargement…" : "Afficher le Gantt"}
+                </button>
               </div>
             </div>
-          )}
+          </div>
+        )}
       </form>
 
       {helpOpen && (
@@ -1250,18 +1277,19 @@ export default function App() {
             </div>
 
             <div className="app__hint">
-              <strong>Profils :</strong> nommez, enregistrez et retrouvez vos tableaux
-              (avec token et clé d'API) directement dans ce navigateur (localStorage).
-              Le dernier profil utilisé est rechargé automatiquement à l'ouverture, et
-              « Afficher le Gantt » met à jour le profil sélectionné. Attention : le
-              token est enregistré en clair dans ce navigateur — ne l'utilisez que sur
-              un poste de confiance.
+              <strong>Profils :</strong> nommez, enregistrez et retrouvez vos
+              tableaux (avec token et clé d'API) directement dans ce navigateur
+              (localStorage). Le dernier profil utilisé est rechargé
+              automatiquement à l'ouverture, et « Afficher le Gantt » met à jour
+              le profil sélectionné. Attention : le token est enregistré en
+              clair dans ce navigateur — ne l'utilisez que sur un poste de
+              confiance.
             </div>
 
             <div className="app__hint">
               <strong>Comment obtenir un token ?</strong> Ouvrez{" "}
-              <strong>⚙️ Connexion Trello</strong> pour saisir vos identifiants. Créez
-              une clé d'API sur{" "}
+              <strong>⚙️ Connexion Trello</strong> pour saisir vos identifiants.
+              Créez une clé d'API sur{" "}
               <a
                 href="https://trello.com/power-ups/admin"
                 target="_blank"
@@ -1273,22 +1301,23 @@ export default function App() {
               <code>
                 https://trello.com/1/authorize?expiration=never&amp;scope=read&amp;response_type=token&amp;key=VOTRE_CLE
               </code>
-              . Les identifiants sont stockés uniquement dans votre navigateur et
-              transmis directement à l'API Trello. Vous pouvez aussi cliquer sur{" "}
-              <strong>Démo</strong> pour voir un exemple sans compte.
+              . Les identifiants sont stockés uniquement dans votre navigateur
+              et transmis directement à l'API Trello. Vous pouvez aussi cliquer
+              sur <strong>Démo</strong> pour voir un exemple sans compte.
             </div>
 
             <div className="app__hint">
-              <strong>Lecture des dates :</strong> la date de <strong>début</strong>{" "}
-              d'une tâche correspond à sa date de début Trello si elle existe, sinon à
-              sa <strong>date de création</strong>. Une tâche{" "}
-              <strong>non terminée</strong> (ni archivée, ni dans la dernière colonne)
-              se prolonge jusqu'à <strong>aujourd'hui</strong>. Les{" "}
+              <strong>Lecture des dates :</strong> la date de{" "}
+              <strong>début</strong> d'une tâche correspond à sa date de début
+              Trello si elle existe, sinon à sa{" "}
+              <strong>date de création</strong>. Une tâche{" "}
+              <strong>non terminée</strong> (ni archivée, ni dans la dernière
+              colonne) se prolonge jusqu'à <strong>aujourd'hui</strong>. Les{" "}
               <strong>étapes</strong> correspondent aux
-              <strong> changements de colonne</strong> de la carte (historique Trello)
-              : chaque segment coloré représente le temps passé dans une colonne, le
-              dernier segment hachuré est la colonne actuelle. Cliquez sur le nom
-              d'une tâche pour l'ouvrir dans Trello.
+              <strong> changements de colonne</strong> de la carte (historique
+              Trello) : chaque segment coloré représente le temps passé dans une
+              colonne, le dernier segment hachuré est la colonne actuelle.
+              Cliquez sur le nom d'une tâche pour l'ouvrir dans Trello.
             </div>
 
             <div className="settings__actions">
@@ -1539,7 +1568,9 @@ export default function App() {
                             style={{ background: s.color }}
                           />
                           {s.listName} ·{" "}
-                          <strong>{Math.round((s.hours / total) * 100)} %</strong>
+                          <strong>
+                            {Math.round((s.hours / total) * 100)} %
+                          </strong>
                           <em>
                             {" "}
                             · {fmtDuration(s.hours)} · {s.tasks} tâche(s)
@@ -1582,7 +1613,12 @@ function LoadingSkeleton() {
     { w: 24, left: 48, tone: 1 },
   ];
   return (
-    <div className="skeleton" role="status" aria-live="polite" aria-label="Chargement du tableau Trello">
+    <div
+      className="skeleton"
+      role="status"
+      aria-live="polite"
+      aria-label="Chargement du tableau Trello"
+    >
       <div className="skeleton__head">
         <span className="skeleton__spinner" aria-hidden />
         <span className="skeleton__label">Chargement du tableau…</span>
