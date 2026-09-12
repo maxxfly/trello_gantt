@@ -67,7 +67,7 @@ export const STEP_STATE_META = {
  * @param {object} raw - { board, lists, closedLists, labels, cards, members, movesByCardId } de fetchBoardData
  * @returns {{ title, rows, membersById, listColors, lists, min, max }}
  */
-export function buildGanttModel({ board, lists, closedLists = [], labels = [], cards, members, movesByCardId = {}, dueHistoryByCardId = {} }) {
+export function buildGanttModel({ board, lists, closedLists = [], labels = [], cards, members, movesByCardId = {}, dueHistoryByCardId = {}, archivedAtByCardId = {} }) {
   // Couleur par liste = étape (colonne du board)
   const listColors = {};
   lists.forEach((l, i) => {
@@ -118,12 +118,16 @@ export function buildGanttModel({ board, lists, closedLists = [], labels = [], c
     }
 
     // Fin de la tâche :
-    //  - terminée : dernier événement connu (échéance incluse) ;
+    //  - terminée : date de la DERNIÈRE ÉTAPE (entrée dans la colonne actuelle) ;
+    //    si la carte a été archivée sans jamais atteindre la dernière colonne,
+    //    date d'archivage. La due date n'étend JAMAIS la barre.
     //  - non terminée : se prolonge jusqu'à aujourd'hui (et au-delà si en retard).
     const lastBoundary = boundaries[boundaries.length - 1].at;
     let taskEnd;
     if (done) {
-      taskEnd = due && due > lastBoundary ? due : lastBoundary;
+      const inLastColumn = lastListId != null && c.idList === lastListId;
+      const archivedAt = inLastColumn ? null : archivedAtByCardId[c.id] || null;
+      taskEnd = archivedAt && archivedAt > lastBoundary ? archivedAt : lastBoundary;
     } else {
       taskEnd = now > start ? now : start;
       if (due && due > taskEnd) taskEnd = due; // en retard -> visible jusqu'à l'échéance

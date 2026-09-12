@@ -115,14 +115,27 @@ export async function fetchBoardData(boardInput, token, apiKey = '') {
   //({ date, listBefore, listAfter }) triés du plus ancien au plus récent.
   //dueHistoryByCardId : anciennes échéances successives (repoussées), issues
   //des actions updateCard:due / updateCard:dueChanged (data.old.due).
+  //archivedAtByCardId : date d'archivage (action updateCard:closed avec
+  //old.closed=false ; le type renvoyé est "updateCard", pas "archiveCard").
   const movesByCardId = {};
   const dueHistoryByCardId = {};
+  const archivedAtByCardId = {};
   for (const a of moveActions) {
     const cardId = a.data?.card?.id;
     if (!cardId) continue;
     // L'API renvoie type="updateCard" pour tout : on classe selon les données.
-    // Une même action peut contenir les deux (déplacement + échéance) : on
-    // traite chaque cas indépendamment.
+    // Une même action peut combiner plusieurs changements (déplacement +
+    // échéance + archivage) : chaque détection est indépendante.
+
+    // Archivage : old.closed=false => la carte vient d'être archivée.
+    // (Le désarchivage a old.closed=true et n'est pas retenu.)
+    const oldClosed = a.data?.old?.closed;
+    if ((oldClosed === false || a.type === 'archiveCard') && a.date) {
+      const d = new Date(a.date);
+      const prev = archivedAtByCardId[cardId];
+      if (!prev || d > prev) archivedAtByCardId[cardId] = d;
+    }
+
     const after = a.data?.listAfter?.id;
     if (after && a.date) {
       // Déplacement entre colonnes.
@@ -133,16 +146,15 @@ export async function fetchBoardData(boardInput, token, apiKey = '') {
         listAfter: after,
       });
     }
-    {
-      // Changement d'échéance : l'ancienne valeur (data.old.due) était en
-      // vigueur jusqu'à la date de l'action.
-      const oldDue = a.data?.old?.due;
-      if (oldDue) {
-        const list = (dueHistoryByCardId[cardId] = dueHistoryByCardId[cardId] || []);
-        const due = new Date(oldDue).getTime();
-        if (!list.some((h) => h.due.getTime() === due)) {
-          list.push({ due: new Date(oldDue), changedAt: a.date ? new Date(a.date) : null });
-        }
+
+    // Changement d'échéance : l'ancienne valeur (data.old.due) était en
+    // vigueur jusqu'à la date de l'action.
+    const oldDue = a.data?.old?.due;
+    if (oldDue) {
+      const list = (dueHistoryByCardId[cardId] = dueHistoryByCardId[cardId] || []);
+      const due = new Date(oldDue).getTime();
+      if (!list.some((h) => h.due.getTime() === due)) {
+        list.push({ due: new Date(oldDue), changedAt: a.date ? new Date(a.date) : null });
       }
     }
   }
@@ -153,11 +165,11 @@ export async function fetchBoardData(boardInput, token, apiKey = '') {
     dueHistoryByCardId[id].sort((x, y) => x.due - y.due);
   }
 
-  return { board, lists, closedLists, cards, members, movesByCardId, dueHistoryByCardId, labels: board.labels || [] };
+  return { board, lists, closedLists, cards, members, movesByCardId, dueHistoryByCardId, archivedAtByCardId, labels: board.labels || [] };
 }
 
 /**
- * Historique des déplacements de cartes entre listes ET des changements
+ * Historique des déplacements de cartes entre listes et des changements
  * d'échéance (filter combiné), paginé (100 actions max par requête,
  * jusqu'à 20 pages = 2000 actions).
  */
@@ -167,7 +179,7 @@ async function fetchListMoves(boardId, auth) {
     const batch = await trelloGet(`/boards/${boardId}/actions`, {
       ...auth,
       params: {
-        filter: 'updateCard:idList,updateCard:due,updateCard:dueChanged',
+        filter: 'updateCard:idList,updateCard:due,updateCard:dueChanged,updateCard:closed',
         limit: 100,
         page,
         fields: 'date,type,data',

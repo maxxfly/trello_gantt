@@ -39,11 +39,13 @@ const cards = [
   { id: '6705f8a9b9c0d1e2f3a4b5c6', shortLink: 'demoGGGG', name: 'Plan marketing Q4', idList: 'l3', start: iso(daysAgo(5)), due: iso(daysAhead(3)), idMembers: ['m1'], idLabels: ['lb5'], closed: false },
   { id: '6692a1b2c3d4e5f6a7b8c9d0', shortLink: 'demoHHHH', name: 'Correctif paiement dupliqué', idList: 'l4', start: iso(daysAgo(45)), due: iso(daysAgo(38)), idMembers: ['m2'], idLabels: ['lb1', 'lb2'], closed: true },
   { id: '6680b2c3d4e5f6a7b8c9d0e1', shortLink: 'demoIIII', name: 'Migration vers l’API v2', idList: 'l4', start: iso(daysAgo(60)), due: iso(daysAgo(41)), idMembers: ['m3', 'm4'], idLabels: ['lb2', 'lb4'], closed: true },
+  { id: '6671c3d4e5f6a7b8c9d0e1f2', shortLink: 'demoJJJJ', name: 'Refonte des e-mails transactionnels', idList: 'l3', start: iso(daysAgo(52)), due: iso(daysAgo(30)), idMembers: ['m1'], idLabels: ['lb3'], closed: true },
 ];
 
 // Historique des changements de colonne (simule les actions updateCard:idList).
 // { date, listBefore, listAfter } triés du plus ancien au plus récent.
-const movesByCardId = {  '66f1a2b3c4d5e6f7a8b9c0d1': [
+const movesByCardId = {
+  '66f1a2b3c4d5e6f7a8b9c0d1': [
     { date: daysAgo(12), listBefore: 'l1', listAfter: 'l2' },
     { date: daysAgo(4), listBefore: 'l2', listAfter: 'l3' },
     { date: daysAgo(1), listBefore: 'l3', listAfter: 'l2' }, // retour en arrière
@@ -75,6 +77,19 @@ const movesByCardId = {  '66f1a2b3c4d5e6f7a8b9c0d1': [
     { date: daysAgo(48), listBefore: 'l2', listAfter: 'l3' },
     { date: daysAgo(42), listBefore: 'l3', listAfter: 'l4' },
   ],
+  // Archivée sans jamais atteindre « Terminé » (derniere colonne) :
+  '6671c3d4e5f6a7b8c9d0e1f2': [
+    { date: daysAgo(50), listBefore: 'l1', listAfter: 'l2' },
+    { date: daysAgo(38), listBefore: 'l2', listAfter: 'l3' },
+  ],
+};
+
+// Dates d'archivage (action archiveCard), pour les cartes terminées hors de la
+// derniere colonne : la barre doit finir a l'archivage, pas a la due date.
+const archivedAtByCardId = {
+  '6692a1b2c3d4e5f6a7b8c9d0': daysAgo(40),
+  '6680b2c3d4e5f6a7b8c9d0e1': daysAgo(42),
+  '6671c3d4e5f6a7b8c9d0e1f2': daysAgo(33), // entree en revue a -38j -> barre jusqu'a -33j
 };
 
 // Anciennes échéances (repoussées), simulées depuis updateCard:due/dueChanged.
@@ -100,5 +115,6 @@ export function getDemoData() {
     labels,
     movesByCardId,
     dueHistoryByCardId,
+    archivedAtByCardId,
   };
 }

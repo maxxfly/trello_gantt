@@ -120,7 +120,7 @@ Trello API — there is no intermediary server.
 | --- | --- | --- |
 | **Task** | Card (linked to `https://trello.com/c/<shortLink>`) | Row + bar on the timeline |
 | **Start date** | `start` if set, otherwise **creation date** (derived from the card ID) | Bar origin |
-| **End date** | **Done** (archived or in the last column): last event / due date. **Not done**: bar extends **to today** (or to the due date if overdue) | Bar end |
+| **End date** | **Done** (archived or in the last column): date of the **last step** — or the **archiving date** if it never reached the last column (never the due date). **Not done**: bar extends **to today** (or to the due date if overdue) | Bar end |
 | **Steps** | **Column changes** (board actions `updateCard:idList`) | Time-proportional segments inside the bar, colored by column |
 | **Current column** | The column the card is in now (open task) | Hatched last segment |
 | **Revisit** | Card moved back to a column it already left | Cross-hatched segment (yellow) |
