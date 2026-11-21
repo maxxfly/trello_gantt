@@ -173,23 +173,18 @@ export async function fetchBoardData(boardInput, token, apiKey = '') {
 
 /**
  * Historique des déplacements de cartes entre listes et des changements
- * d'échéance (filter combiné), paginé (100 actions max par requête,
- * jusqu'à 20 pages = 2000 actions).
+ * d'échéance (filter combiné). Une seule requête avec limit=1000, le
+ * maximum autorisé par l'API : l'offset (page × limit) ne peut pas
+ * dépasser 1000, donc 1000 actions est la limite pratique de cette
+ * ressource.
  */
 async function fetchListMoves(boardId, auth) {
-  const all = [];
-  for (let page = 0; page < 20; page++) {
-    const batch = await trelloGet(`/boards/${boardId}/actions`, {
-      ...auth,
-      params: {
-        filter: 'updateCard:idList,updateCard:due,updateCard:dueChanged,updateCard:closed',
-        limit: 100,
-        page,
-        fields: 'date,type,data',
-      },
-    });
-    all.push(...batch);
-    if (batch.length < 100) break;
-  }
-  return all;
+  return trelloGet(`/boards/${boardId}/actions`, {
+    ...auth,
+    params: {
+      filter: 'updateCard:idList,updateCard:due,updateCard:dueChanged,updateCard:closed',
+      limit: 1000,
+      fields: 'date,type,data',
+    },
+  });
 }
